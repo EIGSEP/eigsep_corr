@@ -3,6 +3,7 @@ import casperfpga.synth
 import hera_corr_f
 import numpy as np
 import struct
+import time
 
 class EigsepFpga:
     
@@ -67,6 +68,23 @@ class EigsepFpga:
         name = "corr_cross_%s_dout"%NM
         spec = np.array(struct.unpack(">4096l", self.fpga.read(name, 16384)))
         return spec
+
+    def time_read_corrs(self):
+        """
+        Measure how long it takes to read all corrs
+        """
+        cnt = self.fpga.read_int("corr_acc_cnt")
+        while self.fpga.read_int("corr_acc_cnt") == cnt:
+            pass
+        start = time.time()
+        for auto in self.autos:
+            self.read_auto(auto)
+        for cross in self.crosses:
+            self.read_cross(cross)
+        dt = time.time() - start
+        assert self.fpga.read_int("corr_acc_cnt") == cnt + 1
+        return dt
+
 
     def test_corr_noise(self):
         noise = hera_corr_f.blocks.NoiseGen(
