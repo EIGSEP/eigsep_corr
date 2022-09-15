@@ -13,12 +13,14 @@ CORR_SCALAR = 2**9
 FFT_SHIFT = 0xffff
 USE_NOISE = False # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
+REUPLOAD_FPG = False
 
 logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 fpga = casperfpga.CasperFpga(SNAP_IP, transport=TapcpTransport)
-fpga.upload_to_ram_and_program(FPGFILE)
+if REUPLOAD_FPG:
+    fpga.upload_to_ram_and_program(FPGFILE)
 
 # check version
 assert fpga.read_int('version_version') == FPG_VERSION
