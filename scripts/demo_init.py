@@ -14,6 +14,7 @@ FFT_SHIFT = 0xffff
 USE_NOISE = False # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
 REUPLOAD_FPG = False
+INITIALIZE_PAMS = False
 
 logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -39,14 +40,17 @@ adc.init(sample_rate=SAMPLE_RATE)
 
 # Align clock and data lanes of ADC.
 fails = adc.alignLineClock()
-if len(fails) > 0:
+while len(fails) > 0:
     logger.warning("alignLineClock failed on: " + str(fails))
+    fails = adc.alignLineClock()
 fails = adc.alignFrameClock()
-if len(fails) > 0:
+while len(fails) > 0:
     logger.warning("alignFrameClock failed on: " + str(fails))
+    fails = adc.alignFrameClock()
 fails = adc.rampTest()
-if len(fails) > 0:
+while len(fails) > 0:
     logger.warning("rampTest failed on: " + str(fails))
+    fails = adc.rampTest()
 
 # Otherwise, finish up here.
 adc.selectADC()
@@ -75,10 +79,11 @@ else:
     inp.use_adc(stream=None)
 
 # initialize pams
-pams = [Pam(fpga, 'i2c_ant%d' % i) for i in range(3)]
-for pam in pams:
-    pam.initialize()
-    pam.set_attenuation(8, 8)
+if INITIALIZE_PAMS:
+    pams = [Pam(fpga, 'i2c_ant%d' % i) for i in range(3)]
+    for pam in pams:
+        pam.initialize()
+        pam.set_attenuation(8, 8)
 
 # synchronize
 sync.set_delay(0)
