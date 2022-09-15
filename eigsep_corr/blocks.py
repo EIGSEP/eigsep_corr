@@ -1,4 +1,3 @@
-from __future__ import print_function
 import logging
 import numpy as np
 import struct
@@ -7,7 +6,6 @@ import time
 import random
 import casperfpga
 import casperfpga.snapadc
-from hera_corr_cm.handlers import add_default_log_handlers
 from casperfpga import i2c
 from casperfpga import i2c_gpio
 from casperfpga import i2c_volt
@@ -16,7 +14,6 @@ from casperfpga import i2c_sn
 from casperfpga import i2c_bar
 from casperfpga import i2c_motion
 from casperfpga import i2c_temp
-from scipy.linalg import hadamard  # for walsh (hadamard) matrices
 
 # There are so many I2C warnings that a new level is defined
 # to filter them out
@@ -33,7 +30,9 @@ class Block(object):
         self.host = host  # casperfpga object
         # One logger per host. Multiple blocks share the same logger.
         # Multiple hosts should *not* share the same logger, since we can multithread over hosts.
-        self.logger = logger or add_default_log_handlers(logging.getLogger(__name__ + ":%s" % (host.host)))
+        if logger is None:
+            logger = logging.getLogger(__name__)
+        self.logger = logger
         self.name = name
         if (name is None) or (name == ''):
             self.prefix = ''
