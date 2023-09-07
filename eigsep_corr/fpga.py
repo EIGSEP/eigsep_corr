@@ -1,27 +1,59 @@
 import casperfpga
-import casperfpga.synth
-import hera_corr_f
+from casperfpga.transport_tapcp import TapcpTransport
+from eigsep_corr.blocks import Input, NoiseGen, Pam, Pfb, Sync
+import logging
 import numpy as np
 import struct
 import time
 
 class EigsepFpga:
     
-    def __init__(self, ip, fpg_file=None):
-        self.fpga = casperfpga.CasperFpga(ip)
+    def __init__(
+        self, snap_ip, fpg_file=None, transport=TapcpTransport, logger=None
+    ):
+        if logger is None:
+            logging.getLogger().setLevel(logging.DEBUG)
+            logger = logging.getLogger(__name__)
+        self.logger = logger
+
+        self.fpga = casperfpga.CasperFpga(snap_ip, transport=transport)
         if fpg_file is not None:
             self.fpg_file = fpg_file
             self.fpga.upload_to_ram_and_program(self.fpg_file)
+        
         self.synth = casperfpga.synth.LMX2581(self.fpga, "synth")
-        self.adc = hera_corr_f.blocks.Adc(
-            self.fpga, num_chans=2, resolution=8, ref=10,
+        self.adc = casperfpga.snapadc.SnapAdc(
+            self.fpga, num_chans=2, resolution=8, ref=10
         )
-        self.adc.init(sample_rate=500)
-        self.sync = hera_corr_f.blocks.Sync(self.fpga, "sync")
+        self.sync = Sync(self.fpga, "sync")
+        self.inp = Input(self.fpga, "input", nstreams=12)
+        self.noise = NoiseGen(self.fpga, "noise", nstreams=6)
+        self.pfb = Pfb(self.fpga, "pfb")
 
         self.autos = [0, 1, 2, 3, 4, 5]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
+    def initialize_adc(self, sample_rate, gain):
+        self.adc.init(sample_rate=sample_rate)
+        
+        # Align clock and data lanes of ADC.
+        fails = self.adc.alignLineClock()
+        while len(fails) > 0:
+            self.logger.warning("alignLineClock failed on: " + str(fails))
+            fails = self.adc.alignLineClock()
+        fails = self.adc.alignFrameClock()
+        while len(fails) > 0:
+            self.logger.warning("alignFrameClock failed on: " + str(fails))
+            fails = self.adc.alignFrameClock()
+        fails = self.adc.rampTest()
+        while len(fails) > 0:
+            self.logger.warning("rampTest failed on: " + str(fails))
+            fails = self.adc.rampTest()
+
+        self.adc.selectADC()
+        self.adc.adc.selectInput([1, 1, 3, 3])  # XXX allow as input arg?
+        self.adc.set_gain(gain)
+    
     def initialize_fpga(self, corr_acc_len=2**28, corr_scalar=2**9):
         """
         Parameters that must be set for the correlator
@@ -39,14 +71,41 @@ class EigsepFpga:
         """
         self.fpga.write_int("corr_acc_len", corr_acc_len)
         self.fpga.write_int("corr_scalar", corr_scalar)
-    
-    def initialize_adc(self, sample_rate):
-        self.adc.init(sample_rate=sample_rate)
 
-    def synchronize(self):
+    def initialize_pams(self):
+        self.pams = [Pam(self.fpga, f"i2c_ant{i}") for i in range(3)]
+        for pam in self.pams:
+            pam.initialize()
+            pam.set_attenuation(8, 8) # XXX
+
+    def initialize_blocks(
+        self,
+        adc_sample_rate,
+        adc_gain=4,
+        pfb_fft_shift=0xffff,
+        corr_acc_len=2**28,
+        corr_scalar=2**9,
+        pams=True,
+    ):
+        
+        self.initialize_adc(adc_sample_rate, adc_gain)
+        self.sync.initialize()
+        self.inp.initialize()
+        self.noise.initialize()
+        self.pfb.initialize()
+        self.pfb.set_fft_shift(pfb_fft_shift)
+        self.initialize_fpga(corr_acc_len, corr_scalar)
+        if pams:
+            self.initialize_pams()
+    
+
+    def synchronize(self, delay=0):
+        self.sync.set_delay(delay)
         self.sync.arm_sync()
         for i in range(3):
             self.sync.sw_sync()
+            sync_time = int(time.time())
+            self.logger.info(f"Synchronized at {sync_time}.")
 
     def read_auto(self, N):
         """
@@ -87,14 +146,9 @@ class EigsepFpga:
 
 
     def test_corr_noise(self):
-        noise = hera_corr_f.blocks.NoiseGen(
-            self.fpga, "noise", nstreams=len(self.autos)
-        )
-        noise.set_seed()  # all feeds get same seed
-        inp = hera_corr_f.blocks.Input(
-            self.fpga, "input", nstreams=2*len(self.autos)
-        )
-        inp.use_noise()
+        self.initialie_blocks(500, pams=False)
+        self.noise.set_seed()  # all feeds get same seed
+        self.inp.use_noise()
         self.synchronize()
 
         cnt = self.fpga.read_int("corr_acc_cnt")
@@ -117,8 +171,8 @@ class EigsepFpga:
 
         # use a different seed for each stream
         for i in range(len(self.autos)):
-            noise.set_seed(stream=i, seed=i)
-        inp.use_noise()
+            self.noise.set_seed(stream=i, seed=i)
+        self.inp.use_noise()
         self.synchronize()
         cnt = self.fpga.read_int("corr_acc_cnt")
         while self.fpga.read_int("corr_acc_cnt") == cnt:
