@@ -5,7 +5,7 @@ import logging
 import time
 
 SNAP_IP = '10.10.10.236'
-FPGFILE = 'eigsep_fengine_1g_v1_0_2002-08-26_1007.fpg'
+FPGFILE = 'eigsep_fengine_1g_v1_0_2022-08-26_1007.fpg'
 FPG_VERSION = 0x10000
 SAMPLE_RATE = 500 # MHz
 CORR_ACC_LEN = 2**28
