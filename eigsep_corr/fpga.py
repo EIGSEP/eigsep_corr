@@ -146,7 +146,7 @@ class EigsepFpga:
 
 
     def test_corr_noise(self):
-        self.initialie_blocks(500, pams=False)
+        self.initialize_blocks(500, pams=False)
         self.noise.set_seed()  # all feeds get same seed
         self.inp.use_noise()
         self.synchronize()
