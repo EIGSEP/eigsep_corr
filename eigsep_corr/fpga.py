@@ -149,11 +149,14 @@ class EigsepFpga:
         self.initialize_blocks(500, pams=False)
         self.noise.set_seed()  # all feeds get same seed
         self.inp.use_noise()
+        self.sync.arm_noise()
+        for i in range(3):
+            self.sync.sw_sync()
         self.synchronize()
 
+        #XXX clear buffer (appears necessary). 5 seems to work, but why?
         cnt = self.fpga.read_int("corr_acc_cnt")
-        # ensure that all spectra are recorded at the same time
-        while self.fpga.read_int("corr_acc_cnt") == cnt:
+        while self.fpga.read_int("corr_acc_cnt") < cnt + 5:
             pass
         auto_spec = [self.read_auto(N) for N in self.autos]
         cross_spec = [self.read_cross(NM) for NM in self.crosses]
@@ -173,9 +176,12 @@ class EigsepFpga:
         for i in range(len(self.autos)):
             self.noise.set_seed(stream=i, seed=i)
         self.inp.use_noise()
+        self.sync.arm_noise()
+        for i in range(3):
+            self.sync.sw_sync()
         self.synchronize()
         cnt = self.fpga.read_int("corr_acc_cnt")
-        while self.fpga.read_int("corr_acc_cnt") == cnt:
+        while self.fpga.read_int("corr_acc_cnt") < cnt + 5:
             pass
         auto_spec = [self.read_auto(N) for N in self.autos]
         cross_spec = [self.read_cross(NM) for NM in self.crosses]
