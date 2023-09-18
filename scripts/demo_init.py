@@ -5,7 +5,7 @@ import logging
 import time
 
 SNAP_IP = '10.10.10.236'
-FPGFILE = 'eigsep_fengine_1g_v1_0_2022-08-26_1007.fpg'
+FPGFILE = '/home/eigsep/eigsep/eigsep_corr/eigsep_fengine_1g_v1_0_2022-08-26_1007.fpg'
 FPG_VERSION = 0x10000
 SAMPLE_RATE = 500 # MHz
 CORR_ACC_LEN = 2**28
@@ -67,7 +67,7 @@ fpga.write_int('corr_scalar', CORR_SCALAR)
 
 # set input
 if USE_NOISE:
-    logger.warn("Switching to noise input")
+    logger.warning("Switching to noise input")
     noise.set_seed(stream=None, seed=0)
     inp.use_noise(stream=None)
     sync.arm_noise()
