@@ -6,8 +6,8 @@ import numpy as np
 import struct
 import time
 
+
 class EigsepFpga:
-    
     def __init__(
         self, snap_ip, fpg_file=None, transport=TapcpTransport, logger=None
     ):
@@ -20,7 +20,7 @@ class EigsepFpga:
         if fpg_file is not None:
             self.fpg_file = fpg_file
             self.fpga.upload_to_ram_and_program(self.fpg_file)
-        
+
         self.synth = casperfpga.synth.LMX2581(self.fpga, "synth")
         self.adc = casperfpga.snapadc.SnapAdc(
             self.fpga, num_chans=2, resolution=8, ref=10
@@ -35,7 +35,7 @@ class EigsepFpga:
 
     def initialize_adc(self, sample_rate, gain):
         self.adc.init(sample_rate=sample_rate)
-        
+
         # Align clock and data lanes of ADC.
         fails = self.adc.alignLineClock()
         while len(fails) > 0:
@@ -53,7 +53,7 @@ class EigsepFpga:
         self.adc.selectADC()
         self.adc.adc.selectInput([1, 1, 3, 3])  # XXX allow as input arg?
         self.adc.set_gain(gain)
-    
+
     def initialize_fpga(self, corr_acc_len=2**28, corr_scalar=2**9):
         """
         Parameters that must be set for the correlator
@@ -76,18 +76,17 @@ class EigsepFpga:
         self.pams = [Pam(self.fpga, f"i2c_ant{i}") for i in range(3)]
         for pam in self.pams:
             pam.initialize()
-            pam.set_attenuation(8, 8) # XXX
+            pam.set_attenuation(8, 8)  # XXX
 
     def initialize_blocks(
         self,
         adc_sample_rate,
         adc_gain=4,
-        pfb_fft_shift=0xffff,
+        pfb_fft_shift=0xFFFF,
         corr_acc_len=2**28,
         corr_scalar=2**9,
         pams=True,
     ):
-        
         self.initialize_adc(adc_sample_rate, adc_gain)
         self.sync.initialize()
         self.inp.initialize()
@@ -97,7 +96,6 @@ class EigsepFpga:
         self.initialize_fpga(corr_acc_len, corr_scalar)
         if pams:
             self.initialize_pams()
-    
 
     def synchronize(self, delay=0):
         self.sync.set_delay(delay)
@@ -111,7 +109,7 @@ class EigsepFpga:
         """
         Read the Nth (counting from 0) autocorrelation spectrum
         """
-        name = "corr_auto_%d_dout"%N
+        name = "corr_auto_%d_dout" % N
         spec = np.array(struct.unpack(">2048l", self.fpga.read(name, 8192)))
         return spec
 
@@ -124,7 +122,7 @@ class EigsepFpga:
         NM : str
             Which correlation to read, e.g. "02". Assuming N<M.
         """
-        name = "corr_cross_%s_dout"%NM
+        name = "corr_cross_%s_dout" % NM
         spec = np.array(struct.unpack(">4096l", self.fpga.read(name, 16384)))
         return spec
 
@@ -144,7 +142,6 @@ class EigsepFpga:
         assert self.fpga.read_int("corr_acc_cnt") == cnt + 1
         return dt
 
-
     def test_corr_noise(self):
         self.initialize_blocks(500, pams=False)
         self.noise.set_seed()  # all feeds get same seed
@@ -154,7 +151,7 @@ class EigsepFpga:
             self.sync.sw_sync()
         self.synchronize()
 
-        #XXX clear buffer (appears necessary). 5 seems to work, but why?
+        # XXX clear buffer (appears necessary). 5 seems to work, but why?
         cnt = self.fpga.read_int("corr_acc_cnt")
         while self.fpga.read_int("corr_acc_cnt") < cnt + 5:
             pass
@@ -203,4 +200,4 @@ class EigsepFpga:
         assert np.any(cross_spec[2] != cross_spec[4])
         # there's no reason for all imag parts to be 0 anymore
         for i in range(3):
-            assert np.any(cross_spec[2*i][1::2] != 0)
+            assert np.any(cross_spec[2 * i][1::2] != 0)
