@@ -7,7 +7,6 @@ if REUPLOAD:
     fpga = EigsepFpga(SNAP_IP, fpg_file=FPG_FILE)
 else:
     fpga = EigsepFpga(SNAP_IP)
-fpga.fpga.write_int("corr_acc_len", 2**28)
-fpga.fpga.write_int("corr_scalar", 2**9)
+fpga.initialize_fpga(corr_acc_len=2**28, corr_scalar=2**9)
 print(fpga.time_read_corrs())
 fpga.test_corr_noise()
