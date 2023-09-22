@@ -119,23 +119,34 @@ class EigsepFpga:
             sync_time = int(time.time())
             self.logger.info(f"Synchronized at {sync_time}.")
 
-    def read_auto(self, N):
+    def read_auto(self, i=None):
         """
-        Read the Nth (counting from 0) autocorrelation spectrum
+        Read the i'th (counting from 0) autocorrelation spectrum.
+
+        Parameters
+        ----------
+        i : int
+            Which autocorrelation to read. Default is None, which reads all
+            autocorrelations.
         """
+        if N is None:
+            return np.array([self.read_auto(i=a) for a in self.autos])
         name = "corr_auto_%d_dout" % N
         spec = np.array(struct.unpack(">2048l", self.fpga.read(name, 8192)))
         return spec
 
-    def read_cross(self, NM):
+    def read_cross(self, ij=None):
         """
-        Read the NM cross correlation spectrum
+        Read the cross correlation spectrum between inputs i and j.
 
         Parameters
         ----------
-        NM : str
-            Which correlation to read, e.g. "02". Assuming N<M.
+        ij : str
+            Which correlation to read, e.g. "02". Assuming N<M. Default is
+            None, which reads all cross correlations.
         """
+        if ij is None:
+            return np.array([self.read_cross(ij=x) for x in self.crosses])
         name = "corr_cross_%s_dout" % NM
         spec = np.array(struct.unpack(">4096l", self.fpga.read(name, 16384)))
         return spec
@@ -148,10 +159,8 @@ class EigsepFpga:
         while self.fpga.read_int("corr_acc_cnt") == cnt:
             pass
         start = time.time()
-        for auto in self.autos:
-            self.read_auto(auto)
-        for cross in self.crosses:
-            self.read_cross(cross)
+        _ = self.read_auto()
+        _ = self.read_cross()
         dt = time.time() - start
         assert self.fpga.read_int("corr_acc_cnt") == cnt + 1
         return dt
