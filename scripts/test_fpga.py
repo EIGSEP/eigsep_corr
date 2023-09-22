@@ -9,9 +9,6 @@ if REUPLOAD:
     fpga = EigsepFpga(SNAP_IP, fpg_file=FPG_FILE)
 else:
     fpga = EigsepFpga(SNAP_IP)
-fpga.initialize_fpga(corr_acc_len=2**28, corr_scalar=2**9)
-print(fpga.time_read_corrs())
-
 
 fpga.initialize_blocks(500, pams=False)
 fpga.noise.set_seed()  # all feeds get same seed
@@ -21,7 +18,7 @@ for i in range(3):
     fpga.sync.sw_sync()
 fpga.synchronize()
 
-#XXX clear buffer (appears necessary). 5 seems to work, but why?
+# XXX clear buffer (appears necessary). 5 seems to work, but why?
 cnt = fpga.fpga.read_int("corr_acc_cnt")
 while fpga.fpga.read_int("corr_acc_cnt") < cnt + 5:
     pass
@@ -70,4 +67,4 @@ assert np.any(cross_spec[0] != cross_spec[4])
 assert np.any(cross_spec[2] != cross_spec[4])
 # there's no reason for all imag parts to be 0 anymore
 for i in range(3):
-    assert np.any(cross_spec[2*i][1::2] != 0)
+    assert np.any(cross_spec[2 * i][1::2] != 0)
