@@ -1,9 +1,6 @@
-import casperfpga
-from casperfpga.transport_tapcp import TapcpTransport
-from eigsep_corr.blocks import Sync, Input, NoiseGen, Pfb, Pam
 import logging
-import time
 import IPython
+from eigsep_corr import EigsepFpga
 
 SNAP_IP = "10.10.10.236"
 FPGFILE = (
@@ -12,89 +9,52 @@ FPGFILE = (
 )
 FPG_VERSION = 0x10000
 SAMPLE_RATE = 500  # MHz
+GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
 CORR_SCALAR = 2**9
 FFT_SHIFT = 0xFFFF
 USE_NOISE = False  # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
 REUPLOAD_FPG = False
-INITIALIZE_PAMS = False
+N_PAMS = 1  # number of PAMs to initialize (0-3)
 
 logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-fpga = casperfpga.CasperFpga(SNAP_IP, transport=TapcpTransport)
 if REUPLOAD_FPG:
-    fpga.upload_to_ram_and_program(FPGFILE)
+    fpga = EigsepFpga(SNAP_IP, logger=logger)
+else:
+    fpga = EigsepFpga(SNAP_IP, fpg_file=FPGFILE, logger=logger)
 
 # check version
-assert fpga.read_int("version_version") == FPG_VERSION
+assert fpga.fpga.read_int("version_version") == FPG_VERSION
 
-# set up block interfaces
-synth = casperfpga.synth.LMX2581(fpga, "synth")
-adc = casperfpga.snapadc.SnapAdc(fpga, num_chans=2, resolution=8, ref=10)
-sync = Sync(fpga, "sync")
-inp = Input(fpga, "input", nstreams=12)
-noise = NoiseGen(fpga, "noise", nstreams=6)
-pfb = Pfb(fpga, "pfb")
-
-# initialize adc
-# synth.initialize() # XXX is this necessary?
-adc.init(sample_rate=SAMPLE_RATE)
-
-# Align clock and data lanes of ADC.
-fails = adc.alignLineClock()
-while len(fails) > 0:
-    logger.warning("alignLineClock failed on: " + str(fails))
-    fails = adc.alignLineClock()
-fails = adc.alignFrameClock()
-while len(fails) > 0:
-    logger.warning("alignFrameClock failed on: " + str(fails))
-    fails = adc.alignFrameClock()
-fails = adc.rampTest()
-while len(fails) > 0:
-    logger.warning("rampTest failed on: " + str(fails))
-    fails = adc.rampTest()
-
-# Otherwise, finish up here.
-adc.selectADC()
-adc.adc.selectInput([1, 1, 3, 3])
-adc.set_gain(4)
-
-# set register values
-for blk in [sync, inp, noise, pfb]:
-    blk.initialize()
-
-pfb.set_fft_shift(FFT_SHIFT)
-fpga.write_int("corr_acc_len", CORR_ACC_LEN)
-fpga.write_int("corr_scalar", CORR_SCALAR)
+# should PAM be initialized here or below the set input?
+fpga.initialize_blocks(
+    SAMPLE_RATE,
+    adc_gain=GAIN,
+    pfb_FFT_shift=FFT_SHIFT,
+    corr_acc_len=CORR_ACC_LEN,
+    corr_scalar=CORR_SCALAR,
+    n_pams=N_PAMS,
+)
 
 # set input
 if USE_NOISE:
-    logger.warning("Switching to noise input")
-    noise.set_seed(stream=None, seed=0)
-    inp.use_noise(stream=None)
-    sync.arm_noise()
+    fpga.logger.warning("Switching to noise input")
+    fpga.noise.set_seed(stream=None, seed=0)
+    fpga.inp.use_noise(stream=None)
+    fpga.sync.arm_noise()
     for i in range(3):
-        sync.sw_sync()
-    logger.info("Synchronized noise.")
+        fpga.sync.sw_sync()
+    fpga.logger.info("Synchronized noise.")
 else:
-    logger.info("Switching to ADC input")
-    inp.use_adc(stream=None)
+    fpga.logger.info("Switching to ADC input")
+    fpga.inp.use_adc(stream=None)
 
-# initialize pams
-if INITIALIZE_PAMS:
-    pams = [Pam(fpga, "i2c_ant%d" % i) for i in range(3)]
-    for pam in pams:
-        pam.initialize()
-        pam.set_attenuation(8, 8)
+# initialize PAMs?
 
 # synchronize
-sync.set_delay(0)
-sync.arm_sync()
-for i in range(3):
-    sync.sw_sync()
-    sync_time = int(time.time())
-    logger.info(f"Synchronized at {sync_time}")
+fpga.synchronize(delay=0)
 
 IPython.embed()
