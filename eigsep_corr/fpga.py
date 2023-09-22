@@ -129,9 +129,9 @@ class EigsepFpga:
             Which autocorrelation to read. Default is None, which reads all
             autocorrelations.
         """
-        if N is None:
+        if i is None:
             return np.array([self.read_auto(i=a) for a in self.autos])
-        name = "corr_auto_%d_dout" % N
+        name = "corr_auto_%d_dout" % i
         spec = np.array(struct.unpack(">2048l", self.fpga.read(name, 8192)))
         return spec
 
@@ -147,7 +147,7 @@ class EigsepFpga:
         """
         if ij is None:
             return np.array([self.read_cross(ij=x) for x in self.crosses])
-        name = "corr_cross_%s_dout" % NM
+        name = "corr_cross_%s_dout" % ij
         spec = np.array(struct.unpack(">4096l", self.fpga.read(name, 16384)))
         return spec
 
