@@ -1,6 +1,6 @@
 import logging
 import IPython
-from eigsep_corr import EigsepFpga
+from eigsep_corr.fpga import EigsepFpga
 
 SNAP_IP = "10.10.10.236"
 FPGFILE = (
@@ -33,7 +33,7 @@ assert fpga.fpga.read_int("version_version") == FPG_VERSION
 fpga.initialize_blocks(
     SAMPLE_RATE,
     adc_gain=GAIN,
-    pfb_FFT_shift=FFT_SHIFT,
+    pfb_fft_shift=FFT_SHIFT,
     corr_acc_len=CORR_ACC_LEN,
     corr_scalar=CORR_SCALAR,
     n_pams=N_PAMS,
