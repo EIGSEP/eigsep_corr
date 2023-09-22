@@ -4,7 +4,7 @@ import time
 import numpy as np
 import casperfpga
 from casperfpga.transport_tapcp import TapcpTransport
-from eigsep_corr.blocks import Input, NoiseGen, Pam, Pfb, Sync
+from eigsep_corr.blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
 
 
 class EigsepFpga:
