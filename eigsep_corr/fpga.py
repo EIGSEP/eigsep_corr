@@ -72,8 +72,17 @@ class EigsepFpga:
         self.fpga.write_int("corr_acc_len", corr_acc_len)
         self.fpga.write_int("corr_scalar", corr_scalar)
 
-    def initialize_pams(self):
-        self.pams = [Pam(self.fpga, f"i2c_ant{i}") for i in range(3)]
+    def initialize_pams(self, N=3):
+        """
+        Initialize the PAMs.
+
+        Parameters
+        ----------
+        N : int
+           Number of PAMs to initialize. Default is 3.
+
+        """
+        self.pams = [Pam(self.fpga, f"i2c_ant{i}") for i in range(N)]
         for pam in self.pams:
             pam.initialize()
             pam.set_attenuation(8, 8)  # XXX
@@ -85,17 +94,22 @@ class EigsepFpga:
         pfb_fft_shift=0xFFFF,
         corr_acc_len=2**28,
         corr_scalar=2**9,
-        pams=True,
+        n_pams=3,
     ):
+        # initialize adc
+        # self.synth.initialize()  # XXX is this necessary?
         self.initialize_adc(adc_sample_rate, adc_gain)
+        # set register values
         self.sync.initialize()
         self.inp.initialize()
         self.noise.initialize()
         self.pfb.initialize()
         self.pfb.set_fft_shift(pfb_fft_shift)
+        # initialize correlator
         self.initialize_fpga(corr_acc_len, corr_scalar)
-        if pams:
-            self.initialize_pams()
+        # initialize pams
+        if n_pams > 0:
+            self.initialize_pams(N=n_pams)
 
     def synchronize(self, delay=0):
         self.sync.set_delay(delay)
