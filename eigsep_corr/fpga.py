@@ -94,7 +94,7 @@ class EigsepFpga:
         for pam in self.pams:
             pam.initialize()
             pam.set_attenuation(8, 8)  # XXX
-    
+
     def initialize_fems(self, N=3):
         """
         Initialize the FEMs.
