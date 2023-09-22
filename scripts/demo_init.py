@@ -29,7 +29,6 @@ else:
 # check version
 assert fpga.fpga.read_int("version_version") == FPG_VERSION
 
-# should PAM be initialized here or below the set input?
 fpga.initialize_blocks(
     SAMPLE_RATE,
     adc_gain=GAIN,
@@ -51,8 +50,6 @@ if USE_NOISE:
 else:
     fpga.logger.info("Switching to ADC input")
     fpga.inp.use_adc(stream=None)
-
-# initialize PAMs?
 
 # synchronize
 fpga.synchronize(delay=0)
