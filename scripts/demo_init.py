@@ -17,6 +17,7 @@ USE_NOISE = False  # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
 REUPLOAD_FPG = False
 N_PAMS = 1  # number of PAMs to initialize (0-3)
+N_FEMS = 1  # number of FEMs to initialize (0-3)
 
 logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ fpga.initialize_blocks(
     corr_acc_len=CORR_ACC_LEN,
     corr_scalar=CORR_SCALAR,
     n_pams=N_PAMS,
+    n_fems=N_FEMS,
 )
 
 # set input
