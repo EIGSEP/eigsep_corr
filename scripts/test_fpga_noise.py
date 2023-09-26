@@ -2,15 +2,33 @@ import numpy as np
 from eigsep_corr.fpga import EigsepFpga
 
 SNAP_IP = "10.10.10.236"
-DIR = "/home/eigsep/eigsep/eigsep_corr/"
-FPG_FILE = DIR + "eigsep_fengine_1g_v1_0_2022-08-26_1007.fpg"
-REUPLOAD = False
-if REUPLOAD:
+FPG_FILE = (
+    "/home/eigsep/eigsep/eigsep_corr/"
+    "eigsep_fengine_1g_v1_0_2022-08-26_1007.fpg"
+)
+SAMPLE_RATE = 500
+GAIN = 4
+CORR_ACC_LEN = 2**28
+CORR_SCALAR = 2**9
+FFT_SHIFT = 0xFFFF
+REUPLOAD_FPG = False
+
+if REUPLOAD_FPG:
     fpga = EigsepFpga(SNAP_IP, fpg_file=FPG_FILE)
 else:
     fpga = EigsepFpga(SNAP_IP)
 
-fpga.initialize_blocks(500, n_pams=0, n_fems=0)
+fpga.initialize(
+    SAMPLE_RATE,
+    adc_gain=GAIN,
+    pfb_fft_shift=FFT_SHIFT,
+    corr_acc_len=CORR_ACC_LEN,
+    corr_scalar=CORR_SCALAR,
+    n_pams=0,
+    n_fems=0,
+)
+
+fpga.logger.warning("Switching to noise input")
 fpga.noise.set_seed()  # all feeds get same seed
 fpga.inp.use_noise()
 fpga.sync.arm_noise()
