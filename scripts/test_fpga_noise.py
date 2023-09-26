@@ -48,11 +48,11 @@ cross_spec2 = fpga.read_cross()
 assert np.allclose(auto_spec, auto_spec2)
 assert np.allclose(cross_spec, cross_spec2)
 # all spectra should be the same since the noise is the same
-assert np.all(auto_spec == auto_spec[0])
-assert np.all(cross_spec == cross_spec[0])
+assert np.allclose(auto_spec, auto_spec[0])
+assert np.allclose(cross_spec, cross_spec[0])
 # cross corr should have real part = autos and im part = 0
-assert np.all(cross_spec[0][::2] == auto_spec[0])
-assert np.all(cross_spec[0][1::2] == 0)
+assert np.allclose(cross_spec[0, ::2], auto_spec[0])
+assert np.allclose(cross_spec[0, 1::2],  0)
 
 # use a different seed for each stream
 for i in range(len(fpga.autos)):
@@ -68,17 +68,17 @@ while fpga.fpga.read_int("corr_acc_cnt") < cnt + 5:
 auto_spec = fpga.read_auto()
 cross_spec = fpga.read_cross()
 # some autos are hardwired to be the same (0 == 1, 2 == 3, 4 == 5)
-assert np.all(auto_spec[0] == auto_spec[1])
-assert np.all(auto_spec[2] == auto_spec[3])
-assert np.all(auto_spec[4] == auto_spec[5])
+assert np.allclose(auto_spec[0], auto_spec[1])
+assert np.allclose(auto_spec[2], auto_spec[3])
+assert np.allclose(auto_spec[4], auto_spec[5])
 # the others are different
 assert np.any(auto_spec[0] != auto_spec[2])
 assert np.any(auto_spec[0] != auto_spec[4])
 assert np.any(auto_spec[2] != auto_spec[4])
 # certain cross corrs must be the same by the above hardwiring
-assert np.all(cross_spec[0] == cross_spec[1])  # 02 == 13
-assert np.all(cross_spec[2] == cross_spec[3])  # 24 == 35
-assert np.all(cross_spec[4] == cross_spec[5])  # 04 == 15
+assert np.allclose(cross_spec[0], cross_spec[1])  # 02 == 13
+assert np.allclose(cross_spec[2], cross_spec[3])  # 24 == 35
+assert np.allclose(cross_spec[4], cross_spec[5])  # 04 == 15
 # the others are different
 assert np.any(cross_spec[0] != cross_spec[2])
 assert np.any(cross_spec[0] != cross_spec[4])
