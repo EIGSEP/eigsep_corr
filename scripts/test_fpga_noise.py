@@ -1,5 +1,5 @@
 import numpy as np
-from eigsep_corr import EigsepFpga
+from eigsep_corr.fpga import EigsepFpga
 
 SNAP_IP = "10.10.10.236"
 DIR = "/home/eigsep/eigsep/eigsep_corr/"
@@ -10,7 +10,7 @@ if REUPLOAD:
 else:
     fpga = EigsepFpga(SNAP_IP)
 
-fpga.initialize_blocks(500, pams=False)
+fpga.initialize_blocks(500, n_pams=0, n_fems=0)
 fpga.noise.set_seed()  # all feeds get same seed
 fpga.inp.use_noise()
 fpga.sync.arm_noise()
