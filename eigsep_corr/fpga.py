@@ -134,10 +134,10 @@ class EigsepFpga:
         n_pams=3,
         n_fems=3,
     ):
-        self.initialize_fpga(corr_acc_len, corr_scalar)
         self.initialize_adc(adc_sample_rate, adc_gain)
         for blk in self.blocks:
             blk.initialize()
+        self.initialize_fpga(corr_acc_len, corr_scalar)
         # initialize pams
         if n_pams > 0:
             self.initialize_pams(N=n_pams)
