@@ -23,14 +23,14 @@ logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 if REUPLOAD_FPG:
-    fpga = EigsepFpga(SNAP_IP, logger=logger)
-else:
     fpga = EigsepFpga(SNAP_IP, fpg_file=FPGFILE, logger=logger)
+else:
+    fpga = EigsepFpga(SNAP_IP, logger=logger)
 
 # check version
 assert fpga.fpga.read_int("version_version") == FPG_VERSION
 
-fpga.initialize_blocks(
+fpga.initialize(
     SAMPLE_RATE,
     adc_gain=GAIN,
     pfb_fft_shift=FFT_SHIFT,
