@@ -126,6 +126,7 @@ class Block:
         val &= 2**width - 1
         return val
 
+
 class Synth(LMX2581):
     def __init__(self, host, name, fosc=10, logger=None):
         if logger is None:
@@ -134,7 +135,7 @@ class Synth(LMX2581):
         super().__init__(host, name, fosc=fosc)
         self.host = host
 
-    def initialize(self, verify=False): #XXX
+    def initialize(self, verify=False):  # XXX
         """
         Seem to have to do this if reference was not present when board was
         powered up (?)
@@ -146,12 +147,12 @@ class Synth(LMX2581):
         Infer the output sample clock from the configuration of the LMX
         registers.
         """
-        VCO_DIV = self.getWord('VCO_DIV')
+        VCO_DIV = self.getWord("VCO_DIV")
         VCO_DIV = 2 * (VCO_DIV + 1)
-        PLL_NUM_H = self.getWord('PLL_NUM_H')
-        PLL_NUM_L = self.getWord('PLL_NUM_L')
-        PLL_N = self.getWord('PLL_N')
-        PLL_DEN = self.getWord('PLL_DEN')
+        PLL_NUM_H = self.getWord("PLL_NUM_H")
+        PLL_NUM_L = self.getWord("PLL_NUM_L")
+        PLL_N = self.getWord("PLL_N")
+        PLL_DEN = self.getWord("PLL_DEN")
         PLL_NUM = (PLL_NUM_H & 0b1111111111) << 12
         PLL_NUM += PLL_NUM_L & 0b111111111111
         return self.FOSC * (PLL_N + PLL_NUM / PLL_DEN) / VCO_DIV

@@ -43,16 +43,15 @@ class EigsepFpga:
             self.sync,
             self.noise,
             self.inp,
-            #self.delay,
+            # self.delay,
             self.pfb,
-            #self.eq,
-            #self.reorder,
-            #self.packetizer,
-            #self.eth,
-            #self.corr,
-            #self.phase_switch,
+            # self.eq,
+            # self.reorder,
+            # self.packetizer,
+            # self.eth,
+            # self.corr,
+            # self.phase_switch,
         ]
-
 
         self.autos = [0, 1, 2, 3, 4, 5]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
@@ -149,7 +148,7 @@ class EigsepFpga:
             self.blocks.extend(self.fems)
         self.synchronize()
         self.pfb.set_fft_shift(pfb_fft_shift)
-    
+
     def synchronize(self, delay=0):
         self.sync.set_delay(delay)
         self.sync.arm_sync()
