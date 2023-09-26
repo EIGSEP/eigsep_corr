@@ -4,7 +4,7 @@ import time
 import numpy as np
 import casperfpga
 from casperfpga.transport_tapcp import TapcpTransport
-from eigsep_corr.blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
+from eigsep_corr.blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync, Synth
 
 
 class EigsepFpga:
@@ -22,21 +22,37 @@ class EigsepFpga:
             self.fpga.upload_to_ram_and_program(self.fpg_file)
 
         # blocks
-        self.synth = casperfpga.synth.LMX2581(self.fpga, "synth")
+        self.synth = Synth(self.fpga, "synth")
         self.adc = casperfpga.snapadc.SnapAdc(
             self.fpga, num_chans=2, resolution=8, ref=10
         )
         self.sync = Sync(self.fpga, "sync")
-        self.inp = Input(self.fpga, "input", nstreams=12)
         self.noise = NoiseGen(self.fpga, "noise", nstreams=6)
-        self.pfb = Pfb(self.fpga, "pfb")
+        self.inp = Input(self.fpga, "input", nstreams=12)
         # self.delay = Delay(self.fpga, "delay", nstreams=6)
+        self.pfb = Pfb(self.fpga, "pfb")
         # self.eq = Eq(self.fpga, "eq_core", nstreams=6, ncoeffs=2**10)
         # self.reorder = ChanReorder(self.fpga, "chan_reorder", nchans=2**10)
         # self.packetizer = Packetizer(self.fpga, "packetizer", n_time_demux=2)
         # self.eth = Eth(self.fpga, "eth")
         # self.corr = Corr(self.fpga, "corr_0")
         # self.phase_switch = PhaseSwitch(self.fpga, "phase_switch")
+
+        self.blocks = [
+            self.synth,
+            self.sync,
+            self.noise,
+            self.inp,
+            #self.delay,
+            self.pfb,
+            #self.eq,
+            #self.reorder,
+            #self.packetizer,
+            #self.eth,
+            #self.corr,
+            #self.phase_switch,
+        ]
+
 
         self.autos = [0, 1, 2, 3, 4, 5]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
@@ -109,7 +125,7 @@ class EigsepFpga:
         for fem in self.fems:
             fem.initialize()
 
-    def initialize_blocks(
+    def initialize(
         self,
         adc_sample_rate,
         adc_gain=4,
@@ -119,28 +135,21 @@ class EigsepFpga:
         n_pams=3,
         n_fems=3,
     ):
-        # self.synth.initialize()  # XXX is this necessary?
-        self.initialize_adc(adc_sample_rate, adc_gain)
-        self.sync.initialize()
-        self.noise.initialize()
-        self.inp.initialize()
-        # self.delay.initialize()
-        self.pfb.initialize()
-        self.pfb.set_fft_shift(pfb_fft_shift)
-        # self.eq.initialize()
-        # self.reorder.initialize()
-        # self.packetizer.initialize()
-        # self.eth.initialize()
-        # self.corr.initialize()
-        # self.phase_switch.initialize()
         self.initialize_fpga(corr_acc_len, corr_scalar)
+        self.initialize_adc(adc_sample_rate, adc_gain)
+        for blk in self.blocks:
+            blk.initialize()
         # initialize pams
         if n_pams > 0:
             self.initialize_pams(N=n_pams)
+            self.blocks.extend(self.pams)
         # initialize fems
         if n_fems > 0:
             self.initialize_fems(N=n_fems)
-
+            self.blocks.extend(self.fems)
+        self.synchronize()
+        self.pfb.set_fft_shift(pfb_fft_shift)
+    
     def synchronize(self, delay=0):
         self.sync.set_delay(delay)
         self.sync.arm_sync()
