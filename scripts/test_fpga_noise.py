@@ -22,11 +22,11 @@ fpga.synchronize()
 cnt = fpga.fpga.read_int("corr_acc_cnt")
 while fpga.fpga.read_int("corr_acc_cnt") < cnt + 5:
     pass
-auto_spec = [fpga.read_auto(N) for N in fpga.autos]
-cross_spec = [fpga.read_cross(NM) for NM in fpga.crosses]
+auto_spec = fpga.read_auto()
+cross_spec = fpga.read_cross()
 # read a second time and see we get all the same
-auto_spec2 = [fpga.read_auto(N) for N in fpga.autos]
-cross_spec2 = [fpga.read_cross(NM) for NM in fpga.crosses]
+auto_spec2 = fpga.read_auto()
+cross_spec2 = fpga.read_cross()
 assert np.allclose(auto_spec, auto_spec2)
 assert np.allclose(cross_spec, cross_spec2)
 # all spectra should be the same since the noise is the same
@@ -47,8 +47,8 @@ fpga.synchronize()
 cnt = fpga.fpga.read_int("corr_acc_cnt")
 while fpga.fpga.read_int("corr_acc_cnt") < cnt + 5:
     pass
-auto_spec = [fpga.read_auto(N) for N in fpga.autos]
-cross_spec = [fpga.read_cross(NM) for NM in fpga.crosses]
+auto_spec = fpga.read_auto()
+cross_spec = fpga.read_cross()
 # some autos are hardwired to be the same (0 == 1, 2 == 3, 4 == 5)
 assert np.all(auto_spec[0] == auto_spec[1])
 assert np.all(auto_spec[2] == auto_spec[3])
