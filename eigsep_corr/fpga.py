@@ -188,14 +188,14 @@ class EigsepFpga:
         return spec
 
     def read_data(self, pairs=None, unpack=False):
+        data = {}
         if pairs is None:
             pairs = self.autos + self.crosses
-        data = {
-            p: self.read_auto(p, unpack=unpack)
-            if len(p) == 1
-            else self.read_cross(p, unpack=unpack)
-            for p in pairs
-        }
+        for p in pairs:
+            if len(p) == 1:
+                data[p] = self.read_auto(p, unpack=unpack)
+            else:
+                data[p] = self.read_cross(p, unpack=unpack)
         return data
 
     def write_file(self, data, cnt):
