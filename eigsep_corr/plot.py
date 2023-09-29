@@ -2,119 +2,74 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
-CHANS = 1024
-
-# XXX add option to make multiple figures for plotting cross mag and phase
-def _plot_init(y, x=None, labels=None, ylim=None):
-    """
-    Live plot initializer.
-
-    Parameters
-    ----------
-    y : array-like
-        Data to plot. Shape (n,) or (m, n). Rows are interpreted as multiple
-        data sets.
-    x : array-like
-        The x-axis. If None, defaults to np.arange(len(y)).
-    labels : list of str
-        Labels for each data set.
-    ylim : tup
-        Limit on y-axis. Gets passed to plt.ylim.
-
-    Returns
-    -------
-    fig : matplotlib.figure.Figure
-        The figure object.
-    lines : list of matplotlib.lines.Line2D
-        The line objects.
-
-    """
-    y = np.atleast_2d(y)
-    if x is None:
-        x = np.arange(y.shape[1])
-    if labels is None:
-        labels = [""] * y.shape[0]
-        use_legend = False
-    else:
-        use_legend = True
-    lines = []
-    plt.ion()
-    fig = plt.figure()
-    for i in range(y.shape[0]):
-        (line,) = plt.plot(x, y[i], label=labels[i])
-        lines.append(line)
-    if ylim is not None:
-        plt.ylim(*ylim)
-    if use_legend:
-        plt.legend()
-    return fig, lines
+NCHAN = 1024
 
 
-def plot(fpga, auto, x=np.arange(CHANS)):
+def plot(
+    redis,
+    pairs=["0", "1", "2", "3", "4", "5", "02", "04", "24", "13", "15", "35"],
+    x=np.arange(NCHAN),
+    ylim_mag=None,
+    ylim_phase=None,
+    sleep=0.1,
+):
     """
     Live plotting of correlation output from FPGA
 
     Parameters
     ----------
-    fpga: eigsep_corr.fpga.EigsepFpga
-        Instance of EigsepFpga object.
-    auto : int or list of ints
-        Auto-correlations to plot.
+    redis: redis.Redis
+        Instance of redis.Redis object where data is stored.
+    pairs : str or list of str
+        Correlation pairs to plot. Defaults to all pairs.
+    x : array-like
+        The x-axis. If None, defaults to np.arange(len(y)).
+    ylim_mag : tup
+        Limit on y-axis for magnitude. Gets passed to plt.ylim.
+    ylim_phase : tup
+        Limit on y-axis for phase. Gets passed to plt.ylim.
+    sleep : float
+        Time (in seconds) to sleep between updates.
+
     """
-    if isinstance(auto, int):
-        auto = [auto]
-
-    labels = ["auto {}".format(i) for i in auto]
-    
-    y = np.zeros((len(auto), CHANS))
-    for i in auto:
-        y[i] = fpga.read_auto(i=i)[:CHANS]
-    fig, lines = _plot_init(y, labels=labels, x=x)
-
-    try:
-        while True:
-            for i in auto:
-                x = fpga.read_auto(i=i)
-                s = x[:CHANS] + x[CHANS:]
-                #d = x[:CHANS] - x[CHANS:]
-                lines[i].set_ydata(s)
-            fig.canvas.draw()
-            fig.canvas.flush_events()
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        plt.close(fig)
-        print("Plotting stopped.")
-
-
-def plot(fpga, pairs=["0", "1", "2", "3", "4", "5", "02", "04", "24", "13", "15", "35"], x=np.arange(CHANS)):
-    
     if isinstance(pairs, str):
         pairs = [pairs]
 
-    y = np.zeros((len(pairs), CHANS))
-    for ij in pairs:
-        if len(ij) == 1:
-            data = fpga.read_auto(i=int(ij))
-        else:
-            data = fpga.read_cross(ij=ij)
-            real = data[::2]
-            imag = data[1::2]
-        mag = np.sqrt(real**2 + imag**2)
-        phase = np.arctan2(imag, real)
-        y[ij] = mag
-    labels = ["cross {}".format(i) for i in cross]
-    fig, lines = _plot_init(y, x=freq, labels=labels)
+    mag_lines = {}
+    phase_lines = {}
+    plt.ion()
+    fig, axs = plt.subplots(figsize=(10, 10), ncols=2, sharex=True)
+    for p in pairs:
+        (line,) = axs[0].plot(x, np.zeros(NCHAN), label=p)
+        mag_lines[p] = line
+        if len(p) == 2:
+            (line,) = axs[1].plot(x, np.zeros(NCHAN), label=p)
+            phase_lines[p] = line
+    if ylim_mag is not None:
+        axs[0].set_ylim(*ylim_mag)
+    if ylim_phase is not None:
+        axs[1].set_ylim(*ylim_phase)
+    axs[0].legend()
+    axs[1].legend()
+
     try:
         while True:
-            for ij in cross:
-                x = fpga.read_cross(ij=ij)
-                real = x[::2]
-                imag = x[1::2]
-                mag = np.sqrt(real**2 + imag**2)
-                lines[ij].set_ydata(mag)
+            for p in pairs:
+                data = redis.get(f"data:{p}")
+                if len(p) == 1:  # auto
+                    mag_lines[p].set_ydata(data)
+                else:  # cross
+                    real = data[::2]
+                    imag = data[1::2]
+                    mag = np.sqrt(real**2 + imag**2)
+                    phase = np.arctan2(imag, real)
+                    mag_lines[p].set_ydata(mag)
+                    phase_lines[p].set_ydata(phase)
+
             fig.canvas.draw()
             fig.canvas.flush_events()
-            time.sleep(0.1)
+            time.sleep(sleep)
+
     except KeyboardInterrupt:
         plt.close(fig)
         print("Plotting stopped.")
