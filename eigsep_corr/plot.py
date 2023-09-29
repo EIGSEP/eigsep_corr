@@ -2,9 +2,10 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
+CHANS = 1024
 
 # XXX add option to make multiple figures for plotting cross mag and phase
-def _plot_init(y, x=None, labels=None):
+def _plot_init(y, x=None, labels=None, ylim=None):
     """
     Live plot initializer.
 
@@ -17,6 +18,8 @@ def _plot_init(y, x=None, labels=None):
         The x-axis. If None, defaults to np.arange(len(y)).
     labels : list of str
         Labels for each data set.
+    ylim : tup
+        Limit on y-axis. Gets passed to plt.ylim.
 
     Returns
     -------
@@ -40,13 +43,14 @@ def _plot_init(y, x=None, labels=None):
     for i in range(y.shape[0]):
         (line,) = plt.plot(x, y[i], label=labels[i])
         lines.append(line)
-    # plt.ylim()
+    if ylim is not None:
+        plt.ylim(*ylim)
     if use_legend:
         plt.legend()
     return fig, lines
 
 
-def plot_auto(fpga, auto):
+def plot(fpga, auto, x=np.arange(CHANS)):
     """
     Live plotting of correlation output from FPGA
 
@@ -60,19 +64,20 @@ def plot_auto(fpga, auto):
     if isinstance(auto, int):
         auto = [auto]
 
-    # freq = np.linspace(0, 250, 2048) #get sample rate from fpga, fftshift?
-    freq = np.arange(2048)
-    y = np.zeros((len(auto), 2048))
-    for i in auto:
-        y[i] = fpga.read_auto(i=i)
     labels = ["auto {}".format(i) for i in auto]
-    fig, lines = _plot_init(y, x=freq, labels=labels)
+    
+    y = np.zeros((len(auto), CHANS))
+    for i in auto:
+        y[i] = fpga.read_auto(i=i)[:CHANS]
+    fig, lines = _plot_init(y, labels=labels, x=x)
 
     try:
         while True:
             for i in auto:
                 x = fpga.read_auto(i=i)
-                lines[i].set_ydata(x)
+                s = x[:CHANS] + x[CHANS:]
+                #d = x[:CHANS] - x[CHANS:]
+                lines[i].set_ydata(s)
             fig.canvas.draw()
             fig.canvas.flush_events()
             time.sleep(0.1)
@@ -81,18 +86,21 @@ def plot_auto(fpga, auto):
         print("Plotting stopped.")
 
 
-def plot_cross(fpga, cross):
-    if isinstance(cross, str):
-        cross = [cross]
+def plot(fpga, pairs=["0", "1", "2", "3", "4", "5", "02", "04", "24", "13", "15", "35"], x=np.arange(CHANS)):
+    
+    if isinstance(pairs, str):
+        pairs = [pairs]
 
-    freq = np.arange(2048)
-    y = np.zeros((len(cross), 2048))
-    for ij in cross:
-        x = fpga.read_cross(ij=ij)
-        real = x[::2]
-        imag = x[1::2]
+    y = np.zeros((len(pairs), CHANS))
+    for ij in pairs:
+        if len(ij) == 1:
+            data = fpga.read_auto(i=int(ij))
+        else:
+            data = fpga.read_cross(ij=ij)
+            real = data[::2]
+            imag = data[1::2]
         mag = np.sqrt(real**2 + imag**2)
-        # phase = np.arctan2(imag, real) #XXX
+        phase = np.arctan2(imag, real)
         y[ij] = mag
     labels = ["cross {}".format(i) for i in cross]
     fig, lines = _plot_init(y, x=freq, labels=labels)
