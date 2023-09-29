@@ -55,7 +55,7 @@ def plot(
     try:
         while True:
             for p in pairs:
-                data = redis.get(f"data:{p}")
+                data = np.frombuffer(redis.get(f"data:{p}"), dtype=int) #XXX
                 if len(p) == 1:  # auto
                     mag_lines[p].set_ydata(data)
                 else:  # cross
