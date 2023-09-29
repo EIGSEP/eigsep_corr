@@ -52,7 +52,7 @@ assert np.allclose(auto_spec, auto_spec[0])
 assert np.allclose(cross_spec, cross_spec[0])
 # cross corr should have real part = autos and im part = 0
 assert np.allclose(cross_spec[0, ::2], auto_spec[0])
-assert np.allclose(cross_spec[0, 1::2],  0)
+assert np.allclose(cross_spec[0, 1::2], 0)
 
 # use a different seed for each stream
 for i in range(len(fpga.autos)):
