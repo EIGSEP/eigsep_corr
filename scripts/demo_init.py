@@ -1,5 +1,4 @@
 import argparse
-import sys
 import logging
 import IPython
 from eigsep_corr.fpga import EigsepFpga
@@ -21,12 +20,45 @@ REUPLOAD_FPG = True
 N_PAMS = 0  # number of PAMs to initialize (0-3)
 N_FEMS = 0  # number of FEMs to initialize (0-3)
 
-parser = argparse.ArgumentParser(description="eigsep correlator", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("-p", dest="program", action="store_true", default=False, help="program eigsep correlator")
-parser.add_argument("-i", dest="initialize", action="store_true", default=False, help="initialize eigsep correlator")
-parser.add_argument("-s", dest="sync", action="store_true", default=False, help="sync eigsep correlator")
-parser.add_argument("-r", dest="update_redis", action="store_true", default=False, help="update redis")
-parser.add_argument("-w", dest="write_files", action="store_true", default=False, help="write data to file")
+parser = argparse.ArgumentParser(
+    description="Eigsep Correlator",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument(
+    "-p",
+    dest="program",
+    action="store_true",
+    default=False,
+    help="program eigsep correlator",
+)
+parser.add_argument(
+    "-i",
+    dest="initialize",
+    action="store_true",
+    default=False,
+    help="initialize eigsep correlator",
+)
+parser.add_argument(
+    "-s",
+    dest="sync",
+    action="store_true",
+    default=False,
+    help="sync eigsep correlator",
+)
+parser.add_argument(
+    "-r",
+    dest="update_redis",
+    action="store_true",
+    default=False,
+    help="update redis",
+)
+parser.add_argument(
+    "-w",
+    dest="write_files",
+    action="store_true",
+    default=False,
+    help="write data to file",
+)
 args = parser.parse_args()
 
 logging.getLogger().setLevel(LOG_LEVEL)
