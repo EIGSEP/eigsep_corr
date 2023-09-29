@@ -1,3 +1,5 @@
+import argparse
+import sys
 import logging
 import IPython
 from eigsep_corr.fpga import EigsepFpga
@@ -15,14 +17,22 @@ CORR_SCALAR = 2**9
 FFT_SHIFT = 0xFFFF
 USE_NOISE = False  # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
-REUPLOAD_FPG = False
-N_PAMS = 1  # number of PAMs to initialize (0-3)
-N_FEMS = 1  # number of FEMs to initialize (0-3)
+REUPLOAD_FPG = True
+N_PAMS = 0  # number of PAMs to initialize (0-3)
+N_FEMS = 0  # number of FEMs to initialize (0-3)
+
+parser = argparse.ArgumentParser(description="eigsep correlator", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("-p", dest="program", action="store_true", default=False, help="program eigsep correlator")
+parser.add_argument("-i", dest="initialize", action="store_true", default=False, help="initialize eigsep correlator")
+parser.add_argument("-s", dest="sync", action="store_true", default=False, help="sync eigsep correlator")
+parser.add_argument("-r", dest="update_redis", action="store_true", default=False, help="update redis")
+parser.add_argument("-w", dest="write_files", action="store_true", default=False, help="write data to file")
+args = parser.parse_args()
 
 logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-if REUPLOAD_FPG:
+if args.program:
     fpga = EigsepFpga(SNAP_IP, fpg_file=FPGFILE, logger=logger)
 else:
     fpga = EigsepFpga(SNAP_IP, logger=logger)
@@ -30,15 +40,16 @@ else:
 # check version
 assert fpga.fpga.read_int("version_version") == FPG_VERSION
 
-fpga.initialize(
-    SAMPLE_RATE,
-    adc_gain=GAIN,
-    pfb_fft_shift=FFT_SHIFT,
-    corr_acc_len=CORR_ACC_LEN,
-    corr_scalar=CORR_SCALAR,
-    n_pams=N_PAMS,
-    n_fems=N_FEMS,
-)
+if args.initialize:
+    fpga.initialize(
+        SAMPLE_RATE,
+        adc_gain=GAIN,
+        pfb_fft_shift=FFT_SHIFT,
+        corr_acc_len=CORR_ACC_LEN,
+        corr_scalar=CORR_SCALAR,
+        n_pams=N_PAMS,
+        n_fems=N_FEMS,
+    )
 
 # set input
 if USE_NOISE:
@@ -54,6 +65,12 @@ else:
     fpga.inp.use_adc(stream=None)
 
 # synchronize
-fpga.synchronize(delay=0)
+if args.sync:
+    fpga.synchronize(delay=0)
 
+print("observing ...")
+try:
+    fpga.observe(update_redis=args.update_redis, write_files=args.write_files)
+except KeyboardInterrupt:
+    pass
 IPython.embed()
