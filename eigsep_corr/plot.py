@@ -55,7 +55,8 @@ def plot(
     try:
         while True:
             for p in pairs:
-                data = np.frombuffer(redis.get(f"data:{p}"), dtype=int) #XXX
+                # XXX double check dtype
+                data = np.frombuffer(redis.get(f"data:{p}"), dtype=np.int32)
                 if len(p) == 1:  # auto
                     mag_lines[p].set_ydata(data)
                 else:  # cross
