@@ -12,6 +12,7 @@ REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 NCHAN = 1024
 
+
 class EigsepFpga:
     def __init__(
         self, snap_ip, fpg_file=None, transport=TapcpTransport, logger=None
@@ -34,28 +35,14 @@ class EigsepFpga:
         self.sync = Sync(self.fpga, "sync")
         self.noise = NoiseGen(self.fpga, "noise", nstreams=6)
         self.inp = Input(self.fpga, "input", nstreams=12)
-        # self.delay = Delay(self.fpga, "delay", nstreams=6)
         self.pfb = Pfb(self.fpga, "pfb")
-        # self.eq = Eq(self.fpga, "eq_core", nstreams=6, ncoeffs=2**10)
-        # self.reorder = ChanReorder(self.fpga, "chan_reorder", nchans=2**10)
-        # self.packetizer = Packetizer(self.fpga, "packetizer", n_time_demux=2)
-        # self.eth = Eth(self.fpga, "eth")
-        # self.corr = Corr(self.fpga, "corr_0")
-        # self.phase_switch = PhaseSwitch(self.fpga, "phase_switch")
 
         self.blocks = [
             self.synth,
             self.sync,
             self.noise,
             self.inp,
-            # self.delay,
             self.pfb,
-            # self.eq,
-            # self.reorder,
-            # self.packetizer,
-            # self.eth,
-            # self.corr,
-            # self.phase_switch,
         ]
 
         self.autos = ["0", "1", "2", "3", "4", "5"]
@@ -117,19 +104,19 @@ class EigsepFpga:
             pam.initialize()
             pam.set_attenuation(8, 8)  # XXX
 
-#    def initialize_fems(self, N=3):
-#        """
-#        Initialize the FEMs.
-#
-#        Parameters
-#        ----------
-#        N : int
-#           Number of FEMs to initialize. Default is 3.
-#
-#        """
-#        self.fems = [Fem(self.fpga, f"i2c_ant{i}") for i in range(N)]
-#        for fem in self.fems:
-#            fem.initialize()
+    def initialize_fems(self, N=3):
+        """
+        Initialize the FEMs.
+
+        Parameters
+        ----------
+        N : int
+           Number of FEMs to initialize. Default is 3.
+
+        """
+        self.fems = [Fem(self.fpga, f"i2c_ant{i}") for i in range(N)]
+        for fem in self.fems:
+            fem.initialize()
 
     def initialize(
         self,
@@ -139,7 +126,7 @@ class EigsepFpga:
         corr_acc_len=2**28,
         corr_scalar=2**9,
         n_pams=3,
-#        n_fems=3,
+        n_fems=0,
     ):
         self.initialize_adc(adc_sample_rate, adc_gain)
         for blk in self.blocks:
@@ -150,9 +137,9 @@ class EigsepFpga:
             self.initialize_pams(N=n_pams)
             self.blocks.extend(self.pams)
         # initialize fems
-#        if n_fems > 0:
-#            self.initialize_fems(N=n_fems)
-#            self.blocks.extend(self.fems)
+        if n_fems > 0:
+            self.initialize_fems(N=n_fems)
+            self.blocks.extend(self.fems)
         self.synchronize()
         self.pfb.set_fft_shift(pfb_fft_shift)
 
@@ -176,10 +163,10 @@ class EigsepFpga:
         """
         if i is None:
             return np.array([self.read_auto(i=a) for a in self.autos])
-        name = "corr_auto_%s_dout" % i
-        spec = self.fpga.read(name, 4*2*NCHAN)
+        name = f"corr_auto_{i}_dout"
+        spec = self.fpga.read(name, 4 * 2 * NCHAN)
         if unpack:
-            spec = np.array(struct.unpack(">%dl"%(2*NCHAN), spec))
+            spec = np.array(struct.unpack(f">{2 * NCHAN}dl", spec))
         return spec
 
     def read_cross(self, ij=None, unpack=False):
@@ -194,16 +181,21 @@ class EigsepFpga:
         """
         if ij is None:
             return np.array([self.read_cross(ij=x) for x in self.crosses])
-        name = "corr_cross_%s_dout" % ij
-        spec = self.fpga.read(name, 4*2*2*NCHAN)
+        name = f"corr_cross_{ij}_dout"
+        spec = self.fpga.read(name, 4 * 2 * 2 * NCHAN)
         if unpack:
-            spec = np.array(struct.unpack(">%dl"%(2*2*NCHAN), spec))
+            spec = np.array(struct.unpack(f">{2*2*NCHAN}l", spec))
         return spec
 
     def read_data(self, pairs=None, unpack=False):
         if pairs is None:
             pairs = self.autos + self.crosses
-        data = {p: self.read_auto(p, unpack=unpack) if len(p) == 1 else self.read_cross(p, unpack=unpack) for p in pairs}
+        data = {
+            p: self.read_auto(p, unpack=unpack)
+            if len(p) == 1
+            else self.read_cross(p, unpack=unpack)
+            for p in pairs
+        }
         return data
 
     def write_file(self, data, cnt):
@@ -212,25 +204,29 @@ class EigsepFpga:
     def update_redis(self, data, cnt):
         for p, d in data.items():
             if len(p) == 1:
-                d = d[:4*NCHAN]
+                d = d[: 4 * NCHAN]
             else:
-                d = d[:4*2*NCHAN]
-            self.redis.set("data:%s"%p, d)
+                d = d[: 4 * 2 * NCHAN]
+            self.redis.set(f"data:{p}", d)
         self.redis.set("ACC_CNT", cnt)
         self.redis.set("updated_unix", int(time.time()))
         self.redis.set("updated_date", datetime.datetime.now().isoformat())
 
-    def observe(self, pairs=None, timeout=10, update_redis=True, write_files=True):
+    def observe(
+        self, pairs=None, timeout=10, update_redis=True, write_files=True
+    ):
         cnt = self.fpga.read_int("corr_acc_cnt")
         t = time.time()
-        while time.time() < t+timeout:
+        while time.time() < t + timeout:
             new_cnt = self.fpga.read_int("corr_acc_cnt")
             if new_cnt == cnt:
                 time.sleep(0.01)
                 continue
             cnt = new_cnt
             data = self.read_data(pairs=pairs, unpack=False)
-            assert cnt == self.fpga.read_int("corr_acc_cnt"), "Ensure read completes before new integration"
+            assert cnt == self.fpga.read_int(
+                "corr_acc_cnt"
+            ), "Ensure read completes before new integration"
             if update_redis:
                 self.update_redis(data, cnt)
             if write_files:
