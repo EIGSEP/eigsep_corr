@@ -13,7 +13,7 @@ SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
 CORR_SCALAR = 2**9
-FFT_SHIFT = 0xFFFF
+FFT_SHIFT = 0x0055
 USE_NOISE = False  # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
 REUPLOAD_FPG = True
@@ -102,7 +102,7 @@ if args.sync:
 
 print("observing ...")
 try:
-    fpga.observe(update_redis=args.update_redis, write_files=args.write_files)
+    fpga.observe(update_redis=args.update_redis, write_files=args.write_files, timeout=40)
 except KeyboardInterrupt:
     pass
 IPython.embed()
