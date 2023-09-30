@@ -166,7 +166,7 @@ class EigsepFpga:
         name = f"corr_auto_{i}_dout"
         spec = self.fpga.read(name, 4 * 2 * NCHAN)
         if unpack:
-            spec = np.array(struct.unpack(f">{2 * NCHAN}dl", spec))
+            spec = np.array(struct.unpack(f">{2 * NCHAN}l", spec))
         return spec
 
     def read_cross(self, ij=None, unpack=False):
