@@ -38,9 +38,9 @@ def plot(
     mag_lines = {}
     phase_lines = {}
     plt.ion()
-    fig, axs = plt.subplots(figsize=(10, 10), ncols=2, sharex=True)
+    fig, axs = plt.subplots(figsize=(10, 10), nrows=2, sharex=True)
     for p in pairs:
-        (line,) = axs[0].plot(x, np.zeros(NCHAN), label=p)
+        (line,) = axs[0].semilogy(x, 10 * np.ones(NCHAN), label=p)
         mag_lines[p] = line
         if len(p) == 2:
             (line,) = axs[1].plot(x, np.zeros(NCHAN), label=p)
@@ -51,17 +51,21 @@ def plot(
         axs[1].set_ylim(*ylim_phase)
     axs[0].legend()
     axs[1].legend()
-
+    ymax = 0
     try:
         while True:
             for p in pairs:
-                # XXX double check dtype
-                data = np.frombuffer(redis.get(f"data:{p}"), dtype=np.int32)
+                dt = np.dtype(np.int32).newbyteorder(">")
+                data = np.frombuffer(redis.get(f"data:{p}"), dtype=dt)
+                cnt = redis.get("ACC_CNT")
+                print(cnt)
                 if len(p) == 1:  # auto
                     mag_lines[p].set_ydata(data)
+                    ymax = max(ymax, data.max())
+                    axs[0].set_ylim(0, ymax)
                 else:  # cross
-                    real = data[::2]
-                    imag = data[1::2]
+                    real = data[::2].astype(np.int64)
+                    imag = data[1::2].astype(np.int64)
                     mag = np.sqrt(real**2 + imag**2)
                     phase = np.arctan2(imag, real)
                     mag_lines[p].set_ydata(mag)
