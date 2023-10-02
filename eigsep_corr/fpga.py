@@ -86,7 +86,7 @@ class EigsepFpga:
         corr_acc_len : int (power of 2)
             The accumulation length.
         corr_scalar : int (power of 2)
-            Scalar that is multiplied to each correlation. 
+            Scalar that is multiplied to each correlation.
 
         """
         self.fpga.write_int("corr_acc_len", corr_acc_len)
