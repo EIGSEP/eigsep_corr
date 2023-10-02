@@ -8,14 +8,26 @@ import casperfpga
 from casperfpga.transport_tapcp import TapcpTransport
 from eigsep_corr.blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync, Synth
 
+SNAP_IP = "10.10.10.236"
+SAMPLE_RATE = 500
+ADC_GAIN = 4
+FFT_SHIFT = 0x0055
+CORR_ACC_LEN = 2**28  # makes corr_acc_cnt increment by ~1 per second
+CORR_SCALAR = 2**9  # correlator uses 8 bits after binary point so 2**9 = 1
+N_PAMS = 3
+N_FEMS = 0  # set to 0 since they're not initialized from SNAP
+NCHAN = 1024
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
-NCHAN = 1024
 
 
 class EigsepFpga:
     def __init__(
-        self, snap_ip, fpg_file=None, transport=TapcpTransport, logger=None
+        self,
+        snap_ip=SNAP_IP,
+        fpg_file=None,
+        transport=TapcpTransport,
+        logger=None,
     ):
         if logger is None:
             logging.getLogger().setLevel(logging.DEBUG)
@@ -71,32 +83,29 @@ class EigsepFpga:
         self.adc.adc.selectInput([1, 1, 3, 3])  # XXX allow as input arg?
         self.adc.set_gain(gain)
 
-    def initialize_fpga(self, corr_acc_len=2**28, corr_scalar=2**9):
+    def initialize_fpga(self, corr_acc_len, corr_scalar):
         """
-        Parameters that must be set for the correlator
+        Initialize the correlator.
 
         Parameters
         ----------
         corr_acc_len : int (power of 2)
-            The accumulation length. Default value ensures that the
-            corr_acc_cnt goes up by 1 per ~1 second
+            The accumulation length.
         corr_scalar : int (power of 2)
-            Scalar that is multiplied to each correlation. Default value is
-            2**9 since the values have 8 bits after the binary point,
-            hence 2**9 = 1
+            Scalar that is multiplied to each correlation. 
 
         """
         self.fpga.write_int("corr_acc_len", corr_acc_len)
         self.fpga.write_int("corr_scalar", corr_scalar)
 
-    def initialize_pams(self, N=3):
+    def initialize_pams(self, N):
         """
         Initialize the PAMs.
 
         Parameters
         ----------
         N : int
-           Number of PAMs to initialize. Default is 3.
+           Number of PAMs to initialize.
 
         """
         self.pams = [Pam(self.fpga, f"i2c_ant{i}") for i in range(N)]
@@ -104,14 +113,14 @@ class EigsepFpga:
             pam.initialize()
             pam.set_attenuation(8, 8)  # XXX
 
-    def initialize_fems(self, N=3):
+    def initialize_fems(self, N):
         """
         Initialize the FEMs.
 
         Parameters
         ----------
         N : int
-           Number of FEMs to initialize. Default is 3.
+           Number of FEMs to initialize.
 
         """
         self.fems = [Fem(self.fpga, f"i2c_ant{i}") for i in range(N)]
@@ -120,13 +129,13 @@ class EigsepFpga:
 
     def initialize(
         self,
-        adc_sample_rate,
-        adc_gain=4,
-        pfb_fft_shift=0xFFFF,
-        corr_acc_len=2**28,
-        corr_scalar=2**9,
-        n_pams=3,
-        n_fems=0,
+        adc_sample_rate=SAMPLE_RATE,
+        adc_gain=ADC_GAIN,
+        pfb_fft_shift=FFT_SHIFT,
+        corr_acc_len=CORR_ACC_LEN,
+        corr_scalar=CORR_SCALAR,
+        n_pams=N_PAMS,
+        n_fems=N_FEMS,
     ):
         self.initialize_adc(adc_sample_rate, adc_gain)
         for blk in self.blocks:
