@@ -4,10 +4,9 @@ import IPython
 from eigsep_corr.fpga import EigsepFpga
 
 SNAP_IP = "10.10.10.236"
-FPGFILE = (
-    "/home/eigsep/eigsep/eigsep_corr/"
-    "eigsep_fengine_1g_v1_0_2022-08-26_1007.fpg"
-)
+# fpg_filename = "eigsep_fengine_1g_v1_0_2022-08-26-1007.fpg"
+fpg_filename = "eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg"
+FPG_FILE = "/home/eigsep/eigsep/eigsep_corr/" + fpg_filename
 FPG_VERSION = 0x10000
 SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
@@ -16,7 +15,6 @@ CORR_SCALAR = 2**9
 FFT_SHIFT = 0x0055
 USE_NOISE = False  # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
-REUPLOAD_FPG = True
 N_PAMS = 0  # number of PAMs to initialize (0-3)
 N_FEMS = 0  # number of FEMs to initialize (0-3)
 
@@ -65,7 +63,7 @@ logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 if args.program:
-    fpga = EigsepFpga(SNAP_IP, fpg_file=FPGFILE, logger=logger)
+    fpga = EigsepFpga(SNAP_IP, fpg_file=FPG_FILE, logger=logger)
 else:
     fpga = EigsepFpga(SNAP_IP, logger=logger)
 
@@ -102,7 +100,11 @@ if args.sync:
 
 print("observing ...")
 try:
-    fpga.observe(update_redis=args.update_redis, write_files=args.write_files, timeout=40)
+    fpga.observe(
+        update_redis=args.update_redis,
+        write_files=args.write_files,
+        timeout=10,
+    )
 except KeyboardInterrupt:
     pass
 IPython.embed()
