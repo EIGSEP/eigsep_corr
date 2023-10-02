@@ -2,3 +2,4 @@
 *.venv/
 build/
 *.egg-info/
+eigsep_fengine_1g_v*/
