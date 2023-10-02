@@ -6,4 +6,4 @@ REDIS_PORT = 6379
 
 r = redis.Redis(REDIS_HOST, port=REDIS_PORT)
 
-plot(r, pairs=["0", "2", "02"], ylim_phase=(-5, 5))
+plot(r, pairs=["0", "2", "02"])
