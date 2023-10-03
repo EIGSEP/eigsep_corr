@@ -10,8 +10,7 @@ def plot(
     redis,
     pairs=["0", "1", "2", "3", "4", "5", "02", "04", "24", "13", "15", "35"],
     x=np.linspace(0, SAMPLE_RATE / 2, NCHAN),
-    ylim_mag=None,
-    ylim_phase=(-np.pi, np.pi),
+    plot_delay=False,
     sleep=0.1,
 ):
     """
@@ -26,11 +25,9 @@ def plot(
     x : array-like
         The x-axis. Defaults to the frequency channels defined by NCHAN and
         SAMPLE_RATE.
-    ylim_mag : tup
-        Limit on y-axis for magnitude. Gets passed to plt.ylim. Defaults to
-        (0, max(y)).
-    ylim_phase : tup
-        Limit on y-axis for phase. Gets passed to plt.ylim.
+    plot_delay : bool
+        Whether to plot delay spectrum, i.e., the Fourier transform of the
+        correlation.
     sleep : float
         Time (in seconds) to sleep between updates.
 
@@ -38,23 +35,33 @@ def plot(
     if isinstance(pairs, str):
         pairs = [pairs]
 
+    colors = {}
+    for i, p in enumerate(pairs):
+        colors[p] = f"C{i}"
     mag_lines = {}
     phase_lines = {}
+    if plot_delay:
+        dly_lines = {}
+        nrows = 3
+    else:
+        nrows = 2
     plt.ion()
-    fig, axs = plt.subplots(figsize=(10, 10), nrows=2, sharex=True)
+    fig, axs = plt.subplots(figsize=(10, 10), nrows=nrows)
     for p in pairs:
-        (line,) = axs[0].semilogy(x, np.ones(NCHAN), label=p)
+        line_kwargs = {"color": colors[p], "label": p}
+        (line,) = axs[0].semilogy(x, np.ones(NCHAN), **line_kwargs)
         mag_lines[p] = line
         if len(p) == 2:
-            (line,) = axs[1].plot(x, np.zeros(NCHAN), label=p)
+            (line,) = axs[1].plot(x, np.zeros(NCHAN), **line_kwargs)
             phase_lines[p] = line
-    if ylim_mag is not None:
-        axs[0].set_ylim(*ylim_mag)
-    else:
-        ymax = 0
-    axs[1].set_ylim(*ylim_phase)
-    axs[0].legend()
-    axs[1].legend()
+            if plot_delay:
+                (line,) = axs[2].plot(np.zeros(NCHAN), **line_kwargs)
+                dly_lines[p] = line
+    ymax_mag = 0
+    if plot_delay:
+        ymax_dly = 0
+    axs[1].set_ylim(-np.pi, np.pi)
+    axs[0].legend(bbox_to_anchor=(1.1, 1.1), loc="upper right")
     try:
         while True:
             for p in pairs:
@@ -64,9 +71,8 @@ def plot(
                 print(cnt)
                 if len(p) == 1:  # auto
                     mag_lines[p].set_ydata(data)
-                    if ylim_mag is None:
-                        ymax = np.maximum(ymax, data.max())
-                        axs[0].set_ylim(0, ymax)
+                    ymax_mag = np.maximum(ymax_mag, data.max())
+                    axs[0].set_ylim(0, ymax_mag)
                 else:  # cross
                     real = data[::2].astype(np.int64)
                     imag = data[1::2].astype(np.int64)
@@ -74,6 +80,11 @@ def plot(
                     phase = np.arctan2(imag, real)
                     mag_lines[p].set_ydata(mag)
                     phase_lines[p].set_ydata(phase)
+                    if plot_delay:
+                        dly = np.abs(np.fft.fft(real+1j*imag)) ** 2
+                        dly_lines[p].set_ydata(dly)
+                        ymax_dly = np.maximum(ymax_dly, dly.max())
+                        axs[2].set_ylim(0, ymax_dly)
 
             fig.canvas.draw()
             fig.canvas.flush_events()
