@@ -37,7 +37,14 @@ def plot(
 
     colors = {}
     for i, p in enumerate(pairs):
-        colors[p] = f"C{i}"
+        # there are only 10 colors in the default color cycle
+        if i == 0:
+            colors[p] = "black"
+        elif i == 1:
+            colors[p] = "lime"
+        else:  # pairs 0-9, and repeats if more than 12 pairs
+            colors[p] = f"C{i-2}"
+
     mag_lines = {}
     phase_lines = {}
     if plot_delay:
