@@ -4,7 +4,6 @@ import redis
 import struct
 import time
 import numpy as np
-import h5py
 import casperfpga
 from casperfpga.transport_tapcp import TapcpTransport
 from eigsep_corr.blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
@@ -213,14 +212,9 @@ class EigsepFpga:
         cnt : int
             Correlation accumulation count.
         """
-        t = time.time()
-        date = datetime.datetime.now().isoformat()
-        fname = f"{date}_{cnt}.h5"
-        with h5py.File(fname, "w") as f:
-            f.create_dataset("cnt", data=cnt)
-            f.create_dataset("unix", data=t)
-            for p, d in data.items():
-                f.create_dataset(p, data=d)
+        d = {f"{cnt}": data}
+        np.savez(fname, **d)  # XXX
+        raise NotImplementedError
 
     def update_redis(self, data, cnt):
         for p, d in data.items():
