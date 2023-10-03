@@ -55,7 +55,7 @@ def plot(
             (line,) = axs[1].plot(x, np.zeros(NCHAN), **line_kwargs)
             phase_lines[p] = line
             if plot_delay:
-                (line,) = axs[2].plot(np.zeros(NCHAN), **line_kwargs)
+                (line,) = axs[2].plot(np.zeros(NCHAN//2+1), **line_kwargs)
                 dly_lines[p] = line
     ymax_mag = 0
     if plot_delay:
@@ -81,7 +81,7 @@ def plot(
                     mag_lines[p].set_ydata(mag)
                     phase_lines[p].set_ydata(phase)
                     if plot_delay:
-                        dly = np.abs(np.fft.fft(real+1j*imag)) ** 2
+                        dly = np.abs(np.fft.rfft(np.exp(1j*phase))) ** 2
                         dly_lines[p].set_ydata(dly)
                         ymax_dly = np.maximum(ymax_dly, dly.max())
                         axs[2].set_ylim(0, ymax_dly)
