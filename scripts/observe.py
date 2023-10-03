@@ -82,9 +82,9 @@ if args.initialize:
     )
 
 # set input
+fpga.noise.set_seed(stream=None, seed=0)
 if USE_NOISE:
     fpga.logger.warning("Switching to noise input")
-    fpga.noise.set_seed(stream=None, seed=0)
     fpga.inp.use_noise(stream=None)
     fpga.sync.arm_noise()
     for i in range(3):
