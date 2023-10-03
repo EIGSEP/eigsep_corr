@@ -6,6 +6,7 @@ from eigsep_corr.fpga import EigsepFpga
 SNAP_IP = "10.10.10.236"
 # fpg_filename = "eigsep_fengine_1g_v1_0_2022-08-26_1007.fpg"
 fpg_filename = "eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg"
+# fpg_filename = "eigsep_fengine_1g_v2_1_2023-10-02_1655.fpg"
 FPG_FILE = "/home/eigsep/eigsep/eigsep_corr/" + fpg_filename
 FPG_VERSION = 0x10000
 SAMPLE_RATE = 500  # MHz
