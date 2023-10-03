@@ -9,7 +9,7 @@ SAMPLE_RATE = 500
 def plot(
     redis,
     pairs=["0", "1", "2", "3", "4", "5", "02", "04", "24", "13", "15", "35"],
-    x=np.linspace(0, SAMPLE_RATE / 2, NCHAN),
+    x=np.linspace(0, SAMPLE_RATE / 2, num=NCHAN, endpoint=False),
     plot_delay=False,
     sleep=0.1,
 ):
@@ -47,6 +47,13 @@ def plot(
         nrows = 2
     plt.ion()
     fig, axs = plt.subplots(figsize=(10, 10), nrows=nrows)
+    axs[0].sharex(axs[1])
+    axs[0].set_ylabel("Magnitude")
+    axs[1].set_ylabel("Phase")
+    axs[1].set_xlabel("Frequency (MHz)")
+    if plot_delay:
+        axs[2].set_ylabel("Delay spectrum")
+        axs[2].set_xlabel("Delay (ns)")
     for p in pairs:
         line_kwargs = {"color": colors[p], "label": p}
         (line,) = axs[0].semilogy(x, np.ones(NCHAN), **line_kwargs)
@@ -55,7 +62,9 @@ def plot(
             (line,) = axs[1].plot(x, np.zeros(NCHAN), **line_kwargs)
             phase_lines[p] = line
             if plot_delay:
-                (line,) = axs[2].plot(np.zeros(NCHAN//2+1), **line_kwargs)
+                N_dlys = NCHAN // 2 + 1
+                tau = np.arange(N_dlys) / (SAMPLE_RATE * 1e-3)
+                (line,) = axs[2].plot(tau, np.ones(N_dlys), **line_kwargs)
                 dly_lines[p] = line
     ymax_mag = 0
     if plot_delay:
@@ -81,7 +90,7 @@ def plot(
                     mag_lines[p].set_ydata(mag)
                     phase_lines[p].set_ydata(phase)
                     if plot_delay:
-                        dly = np.abs(np.fft.rfft(np.exp(1j*phase))) ** 2
+                        dly = np.abs(np.fft.rfft(np.exp(1j * phase))) ** 2
                         dly_lines[p].set_ydata(dly)
                         ymax_dly = np.maximum(ymax_dly, dly.max())
                         axs[2].set_ylim(0, ymax_dly)
