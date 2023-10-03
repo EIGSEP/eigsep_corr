@@ -19,7 +19,7 @@ N_FEMS = 0  # set to 0 since they're not initialized from SNAP
 NCHAN = 1024
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
-DATA_PATH = "/media/eigsep/data"  #XXX need one for each ssd
+DATA_PATH = "/media/eigsep/data"  # XXX need one for each ssd
 NSPEC = 60  # number of spectra to accumulate before writing to disk
 
 
@@ -223,7 +223,7 @@ class EigsepFpga:
         if cnt > self.save_cnt + nspec:
             date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             fname = f"{save_dir}/{date}.npz"
-            np.savez(fname, **d)
+            np.savez(fname, **self.buffer)
             self.buffer = {}
             self.save_cnt = cnt
 
@@ -283,5 +283,5 @@ class EigsepFpga:
             if update_redis:
                 self.update_redis(data, cnt)
             if write_files:
-                self.write_file(data, cnt, N, DATA_DIR)
+                self.write_file(data, cnt, nspec, DATA_PATH)
             t = time.time()
