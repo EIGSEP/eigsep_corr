@@ -265,7 +265,9 @@ class EigsepFpga:
         """
         cnt = self.fpga.read_int("corr_acc_cnt")
         t = time.time()
-        self.save_cnt = cnt
+        if write_files:
+            self.save_cnt = cnt
+            self.buffer = {}
         while time.time() < t + timeout:
             new_cnt = self.fpga.read_int("corr_acc_cnt")
             if new_cnt == cnt:
