@@ -19,6 +19,8 @@ N_FEMS = 0  # set to 0 since they're not initialized from SNAP
 NCHAN = 1024
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
+DATA_PATH = "/media/eigsep/T7/data"  # XXX need one for each ssd
+NSPEC = 60  # number of spectra to accumulate before writing to disk
 
 
 class EigsepFpga:
@@ -201,8 +203,29 @@ class EigsepFpga:
                 data[p] = self.read_cross(p, unpack=unpack)
         return data
 
-    def write_file(self, data, cnt):
-        pass
+    def write_file(self, data, cnt, nspec, save_dir):
+        """
+        Write the data to a file.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary of data to write.
+        cnt : int
+            Correlation accumulation count.
+        nspec : int
+            Number of spectra to write to file before creating a new file.
+        save_dir : str
+            Directory to save data to.
+
+        """
+        self.buffer[f"{cnt}"] = data
+        if cnt > self.save_cnt + nspec:
+            date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            fname = f"{save_dir}/{date}.npz"
+            np.savez(fname, **self.buffer)
+            self.buffer = {}
+            self.save_cnt = cnt
 
     def update_redis(self, data, cnt):
         for p, d in data.items():
@@ -216,15 +239,44 @@ class EigsepFpga:
         self.redis.set("updated_date", datetime.datetime.now().isoformat())
 
     def observe(
-        self, pairs=None, timeout=10, update_redis=True, write_files=True
+        self,
+        pairs=None,
+        timeout=10,
+        update_redis=True,
+        write_files=True,
+        nspec=NSPEC,
     ):
+        """
+        Observe continuously.
+
+        Parameters
+        ----------
+        pairs : list
+            List of pairs to read. Default is None, which reads all pairs.
+        timeout : float
+            Number of seconds to wait for a new integration before returning.
+        update_redis : bool
+            Whether to update redis.
+        write_files : bool
+            Whether to write data to files.
+        nspec : int
+            Number of spectra to write to file before creating a new file.
+
+        """
         cnt = self.fpga.read_int("corr_acc_cnt")
         t = time.time()
+        if write_files:
+            self.save_cnt = cnt
+            self.buffer = {}
         while time.time() < t + timeout:
             new_cnt = self.fpga.read_int("corr_acc_cnt")
             if new_cnt == cnt:
                 time.sleep(0.01)
                 continue
+            if new_cnt > cnt + 1:
+                self.logger.warning(
+                    f"Missed {new_cnt - cnt - 1} integrations."
+                )
             cnt = new_cnt
             data = self.read_data(pairs=pairs, unpack=False)
             assert cnt == self.fpga.read_int(
@@ -233,5 +285,5 @@ class EigsepFpga:
             if update_redis:
                 self.update_redis(data, cnt)
             if write_files:
-                self.write_file(data, cnt)
+                self.write_file(data, cnt, nspec, DATA_PATH)
             t = time.time()
