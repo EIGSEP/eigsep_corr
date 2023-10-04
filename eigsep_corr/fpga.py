@@ -62,15 +62,16 @@ class EigsepFpga:
         return {
             "SNAP_IP": self.fpga.host,
             "fpg_file": self.fpg_file,
+            "nchan": NCHAN,
             "adc_sample_rate": self.adc.sample_rate,
             "adc_gain": self.adc.gain,
             "pfb_fft_shift": self.pfb.fft_shift,
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
+            "pol0_delay": self.fpga.read_uint("pfb_pol0_delay"),
             "n_pams": len(self.pams),
             "n_fems": len(self.fems),
             "pam_attenuation": self.pams[0].get_attenuation(),
-            "nchan": NCHAN,
             "data_path": DATA_PATH,
             "sync_time": self.sync_time,
         }
@@ -143,6 +144,18 @@ class EigsepFpga:
         """
         self.fpga.write_int("corr_acc_len", corr_acc_len)
         self.fpga.write_int("corr_scalar", corr_scalar)
+
+    def set_pol0_delay(self, delay=0):
+        """
+        Set the delay for the pol0 input.
+
+        Parameters
+        ----------
+        delay : int
+            The delay in clock cycles.
+
+        """
+        self.fpga.write_int("pfb_pol0_delay", delay)
 
     def initialize_pams(self, N):
         """
