@@ -21,6 +21,7 @@ REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 DATA_PATH = "/media/eigsep/T7/data"  # XXX need one for each ssd
 
+
 class EigsepFpga:
     def __init__(
         self,
@@ -53,7 +54,7 @@ class EigsepFpga:
 
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
-        
+
         self.redis = redis.Redis(REDIS_HOST, port=REDIS_PORT)
 
     @property
@@ -68,28 +69,61 @@ class EigsepFpga:
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
             "n_pams": len(self.pams),
             "n_fems": len(self.fems),
-            "pam_attenuation": self.pams[0].get_attenuation,
+            "pam_attenuation": self.pams[0].get_attenuation(),
             "nchan": NCHAN,
             "data_path": DATA_PATH,
             "sync_time": self.sync_time,
         }
 
-    def initialize_adc(self, sample_rate, gain):
+    def _run_adc_test(self, test, n_tries):
+        """
+        Run a test and retry if it fails.
+
+        Parameters
+        ----------
+        test : callable
+            The test to run. Must return a list of failed tests.
+        n_tries : int
+            Number of attempts at each test before giving up.
+
+        Raises
+        ------
+        RuntimeError
+            If the tests do not pass after n_tries attempts.
+        """
+        fails = test()
+        tries = 1
+        while len(fails) > 0:
+            self.logger.warning(f" {test.__name__} failed on: " + str(fails))
+            fails = test()
+            tries += 1
+            if tries > n_tries:
+                raise RuntimeError(f"test failed after {tries} tries")
+
+    def initialize_adc(self, sample_rate, gain, n_tries=10):
+        """
+        Initialize the ADC. Aligns the clock and data lanes, and runs a ramp
+        test.
+
+        Parameters
+        ----------
+        sample_rate : int
+            The sample rate in MHz.
+        gain : int
+            The gain of the ADC.
+        n_tries : int
+            Number of attempts at each test before giving up.
+
+        Raises
+        ------
+        RuntimeError
+            If the tests do not pass after n_tries attempts.
+        """
         self.adc.init(sample_rate=sample_rate)
 
-        # Align clock and data lanes of ADC.
-        fails = self.adc.alignLineClock()
-        while len(fails) > 0:
-            self.logger.warning("alignLineClock failed on: " + str(fails))
-            fails = self.adc.alignLineClock()
-        fails = self.adc.alignFrameClock()
-        while len(fails) > 0:
-            self.logger.warning("alignFrameClock failed on: " + str(fails))
-            fails = self.adc.alignFrameClock()
-        fails = self.adc.rampTest()
-        while len(fails) > 0:
-            self.logger.warning("rampTest failed on: " + str(fails))
-            fails = self.adc.rampTest()
+        self._run_adc_test(self.adc.alignLineClock, n_tries=n_tries)
+        self._run_adc_test(self.adc.alignFrameClock, n_tries=n_tries)
+        self._run_adc_test(self.adc.rampTest, n_tries=n_tries)
 
         self.adc.selectADC()
         self.adc.adc.selectInput([1, 1, 3, 3])  # XXX allow as input arg?
