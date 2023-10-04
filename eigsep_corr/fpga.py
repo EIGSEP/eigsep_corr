@@ -20,8 +20,6 @@ NCHAN = 1024
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 DATA_PATH = "/media/eigsep/T7/data"  # XXX need one for each ssd
-NSPEC = 60  # number of spectra to accumulate before writing to disk
-
 
 class EigsepFpga:
     def __init__(
@@ -50,13 +48,31 @@ class EigsepFpga:
         self.noise = NoiseGen(self.fpga, "noise", nstreams=6)
         self.inp = Input(self.fpga, "input", nstreams=12)
         self.pfb = Pfb(self.fpga, "pfb")
-
         self.blocks = [self.sync, self.noise, self.inp, self.pfb]
+        self.sync_time = None  # time of last sync
 
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
-
+        
         self.redis = redis.Redis(REDIS_HOST, port=REDIS_PORT)
+
+    @property
+    def metadata(self):
+        return {
+            "SNAP_IP": self.fpga.host,
+            "fpg_file": self.fpg_file,
+            "adc_sample_rate": self.adc.sample_rate,
+            "adc_gain": self.adc.gain,
+            "pfb_fft_shift": self.pfb.fft_shift,
+            "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
+            "corr_scalar": self.fpga.read_uint("corr_scalar"),
+            "n_pams": len(self.pams),
+            "n_fems": len(self.fems),
+            "pam_attenuation": self.pams[0].get_attenuation,
+            "nchan": NCHAN,
+            "data_path": DATA_PATH,
+            "sync_time": self.sync_time,
+        }
 
     def initialize_adc(self, sample_rate, gain):
         self.adc.init(sample_rate=sample_rate)
@@ -155,6 +171,7 @@ class EigsepFpga:
             self.sync.sw_sync()
             sync_time = int(time.time())
             self.logger.info(f"Synchronized at {sync_time}.")
+        self.sync_time = sync_time
 
     def read_auto(self, i=None, unpack=False):
         """
@@ -223,7 +240,7 @@ class EigsepFpga:
         if cnt > self.save_cnt + nspec:
             date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             fname = f"{save_dir}/{date}.npz"
-            np.savez(fname, **self.buffer)
+            np.savez(fname, **self.metadata, **self.buffer)
             self.buffer = {}
             self.save_cnt = cnt
 
@@ -244,7 +261,7 @@ class EigsepFpga:
         timeout=10,
         update_redis=True,
         write_files=True,
-        nspec=NSPEC,
+        nspec=60,
     ):
         """
         Observe continuously.
