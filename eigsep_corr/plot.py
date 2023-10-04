@@ -6,7 +6,7 @@ NCHAN = 1024
 SAMPLE_RATE = 500
 
 
-def plot(
+def plot_live(
     redis,
     pairs=["0", "1", "2", "3", "4", "5", "02", "04", "24", "13", "15", "35"],
     x=np.linspace(0, SAMPLE_RATE / 2, num=NCHAN, endpoint=False),
@@ -109,3 +109,7 @@ def plot(
     except KeyboardInterrupt:
         plt.close(fig)
         print("Plotting stopped.")
+
+
+def plot_from_file():
+    raise NotImplementedError
