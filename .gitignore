@@ -4,3 +4,4 @@ build/
 *.egg-info/
 eigsep_fengine_1g_v*/
 notebooks/.ipynb_checkpoints/
+*.npz
