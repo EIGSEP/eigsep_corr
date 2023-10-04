@@ -19,7 +19,7 @@ N_FEMS = 0  # set to 0 since they're not initialized from SNAP
 NCHAN = 1024
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
-DATA_PATH = "/media/eigsep/data"  # XXX need one for each ssd
+DATA_PATH = "/media/eigsep/T7/data"  # XXX need one for each ssd
 NSPEC = 60  # number of spectra to accumulate before writing to disk
 
 
