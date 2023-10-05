@@ -79,7 +79,6 @@ class EigsepFpga:
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
             "pol0_delay": self.fpga.read_uint("pfb_pol0_delay"),
-            "pol1_delay": self.fpga.read_uint("pfb_pol1_delay"),
             "n_pams": len(self.pams),
             "n_fems": len(self.fems),
             "pam_attenuation": self.pams[0].get_attenuation(),
@@ -171,10 +170,8 @@ class EigsepFpga:
 
         """
         self.fpga.write_int("pfb_pol0_delay", delay)
-        self.fpga.write_int("pfb_pol1_delay", delay)
         if verify:
             assert self.fpga.read_uint("pfb_pol0_delay") == delay
-            assert self.fpga.read_uint("pfb_pol1_delay") == delay
 
     def initialize_pams(self, N):
         """
