@@ -302,7 +302,7 @@ class EigsepFpga:
         if self.savefile is None:
             date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             fname = f"{save_dir}/{date}.json"
-            self.savefile = io.File(fname, self.metadata)
+            self.savefile = io.File(fname, int(time.time()), self.sync_time)
         # add data to buffer
         self.savefile.add_data(data, cnt)
         # write to file if buffer is full
