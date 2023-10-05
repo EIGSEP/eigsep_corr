@@ -12,6 +12,7 @@ SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
 CORR_SCALAR = 2**9
+INPUT_DELAY = 0
 FFT_SHIFT = 0x0055
 USE_NOISE = False  # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
@@ -76,6 +77,7 @@ if args.initialize:
         pfb_fft_shift=FFT_SHIFT,
         corr_acc_len=CORR_ACC_LEN,
         corr_scalar=CORR_SCALAR,
+        input_delay=INPUT_DELAY,
         n_pams=N_PAMS,
         n_fems=N_FEMS,
     )

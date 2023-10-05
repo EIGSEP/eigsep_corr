@@ -19,6 +19,7 @@ ADC_GAIN = 4
 FFT_SHIFT = 0x0055
 CORR_ACC_LEN = 2**28  # makes corr_acc_cnt increment by ~1 per second
 CORR_SCALAR = 2**9  # correlator uses 8 bits after binary point so 2**9 = 1
+INPUT_DELAY = 0
 N_PAMS = 3
 N_FEMS = 0  # set to 0 since they're not initialized from SNAP
 NCHAN = 1024
@@ -77,15 +78,14 @@ class EigsepFpga:
             "pfb_fft_shift": self.pfb.fft_shift,
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
+            "pol0_delay": self.fpga.read_uint("pfb_pol0_delay"),
+            "pol1_delay": self.fpga.read_uint("pfb_pol1_delay"),
             "n_pams": len(self.pams),
             "n_fems": len(self.fems),
             "pam_attenuation": self.pams[0].get_attenuation(),
             "data_path": DATA_PATH,
             "sync_time": self.sync_time,
         }
-        # only v2_1 has pfb_pol0_delay
-        if "pfb_pol0_delay" in self.fpga.listdev():
-            m["pol0_delay"] = self.fpga.read_uint("pfb_pol0_delay")
         return m
 
     def _run_adc_test(self, test, n_tries):
@@ -142,7 +142,7 @@ class EigsepFpga:
         self.adc.adc.selectInput([1, 1, 3, 3])  # XXX allow as input arg?
         self.adc.set_gain(gain)
 
-    def initialize_fpga(self, corr_acc_len, corr_scalar):
+    def initialize_fpga(self, corr_acc_len, corr_scalar, verify=False):
         """
         Initialize the correlator.
 
@@ -156,10 +156,13 @@ class EigsepFpga:
         """
         self.fpga.write_int("corr_acc_len", corr_acc_len)
         self.fpga.write_int("corr_scalar", corr_scalar)
+        if verify:
+            assert self.fpga.read_uint("corr_acc_len") == corr_acc_len
+            assert self.fpga.read_uint("corr_scalar") == corr_scalar
 
-    def set_pol0_delay(self, delay=0):
+    def set_input_delay(self, delay=0, verify=False):
         """
-        Set the delay for the pol0 input.
+        Set the delay for the pol0 and pol1 inputs.
 
         Parameters
         ----------
@@ -168,6 +171,10 @@ class EigsepFpga:
 
         """
         self.fpga.write_int("pfb_pol0_delay", delay)
+        self.fpga.write_int("pfb_pol1_delay", delay)
+        if verify:
+            assert self.fpga.read_uint("pfb_pol0_delay") == delay
+            assert self.fpga.read_uint("pfb_pol1_delay") == delay
 
     def initialize_pams(self, N):
         """
@@ -205,6 +212,7 @@ class EigsepFpga:
         pfb_fft_shift=FFT_SHIFT,
         corr_acc_len=CORR_ACC_LEN,
         corr_scalar=CORR_SCALAR,
+        input_delay=INPUT_DELAY,
         n_pams=N_PAMS,
         n_fems=N_FEMS,
     ):
@@ -212,6 +220,7 @@ class EigsepFpga:
         for blk in self.blocks:
             blk.initialize()
         self.initialize_fpga(corr_acc_len, corr_scalar)
+        self.set_input_delay(input_delay)
         # initialize pams
         if n_pams > 0:
             self.initialize_pams(N=n_pams)

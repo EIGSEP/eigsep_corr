@@ -5,7 +5,7 @@ import numpy as np
 # can use sys.getsizeof to check size of object in bytes
 
 HEADER = {
-    "header_size": 640,  # size of this object in bytes
+    "header_size": 640,  # XXX size of this object in bytes
     "nfiles": 60,  # number of integrations per file
     "dtype": "int32",  # data type
     "byteorder": ">",  # endianess of data
@@ -18,6 +18,7 @@ HEADER = {
     "corr_acc_len": 2**28,  # number of samples to accumulate
     "corr_scalar": 2**9,  # 2^9 = 1, using 8 bits after binary point
     "pol0_delay": 0,  # delay in sample clocks of input 0
+    "pol1_delay": 0,  # delay in sample clocks of input 0
     "fft_shift": 0x0055,
     "inputs": [0, 1, 2, 3, 4, 5],  # inputs used
 }
@@ -57,7 +58,7 @@ class File:
         self.data = {
             "header": self.header,
             "time": self.time,
-            "sync_time": self.sync_time
+            "sync_time": self.sync_time,
         }
         self.max_cnt = None
 
