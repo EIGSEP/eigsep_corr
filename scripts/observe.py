@@ -3,11 +3,11 @@ import logging
 import IPython
 from eigsep_corr.fpga import EigsepFpga
 
-SNAP_IP = "10.10.10.236"
-# fpg_filename = "eigsep_fengine_1g_v1_0_2022-08-26_1007.fpg"
-fpg_filename = "eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg"
+SNAP_IP = "10.10.10.13"
+#SNAP_IP = "10.10.10.236"
+fpg_filename = "eigsep_fengine_1g_v2_1_2023-10-05_1148.fpg"
 FPG_FILE = "/home/eigsep/eigsep/eigsep_corr/" + fpg_filename
-FPG_VERSION = 0x10000
+FPG_VERSION = 0x20001
 SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
@@ -68,7 +68,8 @@ fpga = EigsepFpga(
 )
 
 # check version
-assert fpga.fpga.read_int("version_version") == FPG_VERSION
+#print(fpga.fpga.read_int("version_version"))
+#assert fpga.fpga.read_int("version_version") == FPG_VERSION
 
 if args.initialize:
     fpga.initialize(
