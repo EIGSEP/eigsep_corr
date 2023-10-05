@@ -3,5 +3,6 @@
 build/
 *.egg-info/
 eigsep_fengine_1g_v*/
+golden_1g_v1_0/
 notebooks/.ipynb_checkpoints/
 *.npz
