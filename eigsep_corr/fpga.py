@@ -38,8 +38,8 @@ class EigsepFpga:
         logger=None,
     ):
         if logger is None:
-            logging.getLogger().setLevel(logging.DEBUG)
             logger = logging.getLogger(__name__)
+            logging.basicConfig(filename="snap.log", level=logging.DEBUG)
         self.logger = logger
 
         self.fpg_file = fpg_file
