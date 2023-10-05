@@ -62,10 +62,9 @@ args = parser.parse_args()
 logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-if args.program:
-    fpga = EigsepFpga(SNAP_IP, fpg_file=FPG_FILE, logger=logger)
-else:
-    fpga = EigsepFpga(SNAP_IP, logger=logger)
+fpga = EigsepFpga(
+    SNAP_IP, fpg_file=FPG_FILE, program=args.program, logger=logger
+)
 
 # check version
 assert fpga.fpga.read_int("version_version") == FPG_VERSION

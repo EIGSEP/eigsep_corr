@@ -11,6 +11,9 @@ from . import io
 from .blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
 
 SNAP_IP = "10.10.10.236"
+FPG_FILE = (
+    "/home/eigsep/eigsep_corr/eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg"
+)
 SAMPLE_RATE = 500
 ADC_GAIN = 4
 FFT_SHIFT = 0x0055
@@ -28,7 +31,8 @@ class EigsepFpga:
     def __init__(
         self,
         snap_ip=SNAP_IP,
-        fpg_file=None,
+        fpg_file=FPG_FILE,
+        program=False,
         transport=TapcpTransport,
         logger=None,
     ):
@@ -37,9 +41,9 @@ class EigsepFpga:
             logger = logging.getLogger(__name__)
         self.logger = logger
 
+        self.fpg_file = fpg_file
         self.fpga = casperfpga.CasperFpga(snap_ip, transport=transport)
-        if fpg_file is not None:
-            self.fpg_file = fpg_file
+        if program:
             self.fpga.upload_to_ram_and_program(self.fpg_file)
 
         # blocks
