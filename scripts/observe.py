@@ -14,6 +14,7 @@ CORR_ACC_LEN = 2**28
 CORR_SCALAR = 2**9
 INPUT_DELAY = 0
 FFT_SHIFT = 0x0055
+USE_REF = False  # use reference input
 USE_NOISE = False  # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
 N_PAMS = 0  # number of PAMs to initialize (0-3)
@@ -60,11 +61,16 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
+logger.basicConfig("snap.log", level=LOG_LEVEL)
+
+if USE_REF:
+    ref = 10
+else:
+    ref = None
 
 fpga = EigsepFpga(
-    SNAP_IP, fpg_file=FPG_FILE, program=args.program, logger=logger
+    SNAP_IP, fpg_file=FPG_FILE, program=args.program, ref=ref, logger=logger
 )
 
 # check version

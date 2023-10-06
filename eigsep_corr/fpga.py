@@ -34,9 +34,31 @@ class EigsepFpga:
         snap_ip=SNAP_IP,
         fpg_file=FPG_FILE,
         program=False,
+        ref=None,
         transport=TapcpTransport,
         logger=None,
     ):
+        """
+        Class for interfacing with the SNAP board.
+
+        Parameters
+        ----------
+        snap_ip : str
+            The IP address of the SNAP board. The two used for EIGSEP are
+            10.10.10.13 and 10.10.10.236.
+        fpg_file : str
+            The path to the fpg file to program the SNAP with.
+        program : bool
+            Whether to program the SNAP with the fpg file.
+        ref : int
+            The reference clock frequency in MHz. If None, uses the 
+            500 MHz clock on the SNAP board. Typically set to None or 10.
+        transport : casperfpga.transport_tapcp.TapcpTransport
+            The transport protocol to use. The default is TapcpTransport.
+        logger : logging.Logger
+            The logger to use. If None, creates a new logger.
+
+        """
         if logger is None:
             logger = logging.getLogger(__name__)
             logging.basicConfig(filename="snap.log", level=logging.DEBUG)
@@ -48,9 +70,9 @@ class EigsepFpga:
             self.fpga.upload_to_ram_and_program(self.fpg_file)
 
         # blocks
-        self.synth = casperfpga.synth.LMX2581(self.fpga, "synth", fosc=10)
+        #self.synth = casperfpga.synth.LMX2581(self.fpga, "synth", fosc=10)
         self.adc = casperfpga.snapadc.SnapAdc(
-            self.fpga, num_chans=2, resolution=8, ref=10
+            self.fpga, num_chans=2, resolution=8, ref=ref
         )
         self.sync = Sync(self.fpga, "sync")
         self.noise = NoiseGen(self.fpga, "noise", nstreams=6)
