@@ -1,4 +1,4 @@
-'''
+"""
 Module for interfacing to a 6-antpol xx/yy correlator for EIGSEP.
 This is nominally uses a 4-tap, 2048 real sample (1024 ch) PFB,
 with a direct correlation and vector accumulation of 2048 samples,
@@ -9,7 +9,7 @@ The important bit widths are:
 (ADC) 8_7 (PFB_FIR) 18_17 (FFT) 18_17 (CORR) 18_17 (SCALAR) 18_7 (VACC) 32_7
 Affecting the signal level are the FFT_SHIFT (0b00001010101) and the
 CORR_SCALAR (18_8).
-'''
+"""
 
 import datetime
 import logging
@@ -29,18 +29,18 @@ FPG_FILE = (
     "/home/eigsep/eigsep_corr/eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg"
 )
 ADC_GAIN = 4
-FFT_SHIFT = 0x0055  # 
+FFT_SHIFT = 0x0055  #
 CORR_ACC_LEN = 2**28  # makes corr_acc_cnt increment by ~1 per second
 CORR_SCALAR = 2**9  # correlator uses 8 bits after binary point so 2**9 = 1
 CORR_WORD = 4  # bytes
-DEFAULT_PAM_ATTEN = {0: (8,8), 1: (8,8), 2: (8,8)}
+DEFAULT_PAM_ATTEN = {0: (8, 8), 1: (8, 8), 2: (8, 8)}
 DEFAULT_POL0_DELAY = 0
 N_FEMS = 0  # set to 0 since they're not initialized from SNAP
 NCHAN = 1024
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 # XXX suggest making the below part of observing script, not module
-#DATA_PATH = "/media/eigsep/T7/data"
+# DATA_PATH = "/media/eigsep/T7/data"
 
 
 class EigsepFpga:
@@ -66,7 +66,7 @@ class EigsepFpga:
         program : bool
             Whether to program the SNAP with the fpg file.
         ref : int
-            The reference clock frequency in MHz. If None, uses the 
+            The reference clock frequency in MHz. If None, uses the
             500 MHz clock on the SNAP board. Typically set to None or 10.
         transport : casperfpga.transport_tapcp.TapcpTransport
             The transport protocol to use. The default is TapcpTransport.
@@ -85,7 +85,7 @@ class EigsepFpga:
             self.fpga.upload_to_ram_and_program(self.fpg_file)
 
         # blocks
-        #self.synth = casperfpga.synth.LMX2581(self.fpga, "synth", fosc=10)
+        # self.synth = casperfpga.synth.LMX2581(self.fpga, "synth", fosc=10)
         self.adc = casperfpga.snapadc.SnapAdc(
             self.fpga, num_chans=2, resolution=8, ref=ref
         )
@@ -118,10 +118,10 @@ class EigsepFpga:
             "pol0_delay": self.fpga.read_uint("pfb_pol0_delay"),
             "n_pams": len(self.pams),
             "n_fems": len(self.fems),
-            "pam_attenuation": self.pams[0].get_attenuation(),  # XXX save individual attenuations
-            #"data_path": DATA_PATH,
             "sync_time": self.sync_time,
         }
+        for i, pam in self.pams:
+            m[f"pam{i}_attenuation"] = pam.get_attenuation()
         return m
 
     def _run_adc_test(self, test, n_tries):
@@ -149,7 +149,9 @@ class EigsepFpga:
             if tries > n_tries:
                 raise RuntimeError(f"test failed after {tries} tries")
 
-    def initialize_adc(self, sample_rate=SAMPLE_RATE, gain=ADC_GAIN, n_tries=10):
+    def initialize_adc(
+        self, sample_rate=SAMPLE_RATE, gain=ADC_GAIN, n_tries=10
+    ):
         """
         Initialize the ADC. Aligns the clock and data lanes, and runs a ramp
         test.
@@ -179,14 +181,16 @@ class EigsepFpga:
         self.adc.adc.selectInput([1, 1, 3, 3])  # XXX allow as input arg?
         self.adc.set_gain(gain)
 
-    def initialize_fpga(self,
-            fft_shift=FFT_SHIFT,
-            corr_acc_len=CORR_ACC_LEN,
-            corr_scalar=CORR_SCALAR,
-            pol0_delay=DEFAULT_POL0_DELAY,
-            pam_atten=DEFAULT_PAM_ATTEN,
-            n_fems=N_FEMS,
-            verify=False):
+    def initialize_fpga(
+        self,
+        fft_shift=FFT_SHIFT,
+        corr_acc_len=CORR_ACC_LEN,
+        corr_scalar=CORR_SCALAR,
+        pol0_delay=DEFAULT_POL0_DELAY,
+        pam_atten=DEFAULT_PAM_ATTEN,
+        n_fems=N_FEMS,
+        verify=False,
+    ):
         """
         Initialize the correlator.
 
@@ -202,15 +206,13 @@ class EigsepFpga:
             blk.initialize()
         # initialize pams
         self.initialize_pams(pam_atten=pam_atten)
-        self.blocks.extend(self.pams)
         # initialize fems
         self.initialize_fems(N=n_fems)
-        self.blocks.extend(self.fems)
-        self.logger.info(f'Setting FFT_SHIFT: {fft_shift}')
+        self.logger.info(f"Setting FFT_SHIFT: {fft_shift}")
         self.pfb.set_fft_shift(fft_shift)
-        self.logger.info(f'Setting CORR_ACC_LEN: {corr_acc_len}')
+        self.logger.info(f"Setting CORR_ACC_LEN: {corr_acc_len}")
         self.fpga.write_int("corr_acc_len", corr_acc_len)
-        self.logger.info(f'Setting CORR_SCALAR: {corr_scalar}')
+        self.logger.info(f"Setting CORR_SCALAR: {corr_scalar}")
         self.fpga.write_int("corr_scalar", corr_scalar)
         if verify:
             assert self.fpga.read_uint("corr_acc_len") == corr_acc_len
@@ -227,8 +229,7 @@ class EigsepFpga:
             The delay in clock cycles.
 
         """
-        # XXX did we delay both 0 and 1?
-        self.logger.info(f'Setting POL0_DELAY: {delay}')
+        self.logger.info(f"Setting POL0_DELAY: {delay}")
         self.fpga.write_int("pfb_pol0_delay", delay)
         if verify:
             assert self.fpga.read_uint("pfb_pol0_delay") == delay
@@ -239,15 +240,18 @@ class EigsepFpga:
 
         Parameters
         ----------
-        N : int
-           Number of PAMs to initialize.
+        attenuation : dict
+            Dictionary of attenuation values for each PAM. Keys are antenna
+            numbers, values are tuples of (east, north) attenuation values.
 
         """
         self.pams = []
         for p, (att_e, att_n) in attenuation.items():
             pam = Pam(self.fpga, f"i2c_ant{p}")
             pam.initialize()
-            self.logger.info(f'Setting pam{p} attenuation to ({att_e},{att_n})')
+            self.logger.info(
+                f"Setting pam{p} attenuation to ({att_e},{att_n})"
+            )
             pam.set_attenuation(att_e, att_n)
             self.pams.append(pam)
         self.blocks.extend(self.pams)
@@ -262,37 +266,11 @@ class EigsepFpga:
            Number of FEMs to initialize.
 
         """
-        self.logger.info(f'Attaching {N} FEMs')
+        self.logger.info(f"Attaching {N} FEMs")
         self.fems = [Fem(self.fpga, f"i2c_ant{i}") for i in range(N)]
         for fem in self.fems:
             fem.initialize()
         self.blocks.extend(self.fems)
-
-    def initialize(
-        self,
-        adc_sample_rate=SAMPLE_RATE,
-        adc_gain=ADC_GAIN,
-        fft_shift=FFT_SHIFT,
-        corr_acc_len=CORR_ACC_LEN,
-        corr_scalar=CORR_SCALAR,
-        pol0_delay=DEFAULT_POL0_DELAY,
-        pam_atten=DEFAULT_PAM_ATTEN,
-        n_fems=N_FEMS,
-    ):
-        # XXX perhaps don't unify these into one function, let script call them separately
-        self.initialize_adc(
-            adc_sample_rate=adc_sample_rate,
-            adc_gain=adc_gain,
-        )
-        self.initialize_fpga(
-            fft_shift=fft_shift,
-            corr_acc_len=corr_acc_len,
-            corr_scalar=corr_scalar,
-            pol0_delay=pol0_delay,
-            pam_atten=pam_atten,
-            n_fems=N_FEMS,
-        )
-        self.synchronize(update_redis=True)
 
     def synchronize(self, delay=0, update_redis=True):
         self.sync.set_delay(delay)
@@ -303,16 +281,17 @@ class EigsepFpga:
             self.logger.info(f"Synchronized at {sync_time}.")
         self.sync_time = sync_time
         if update_redis:
-            self.redis.set("SYNC_TIME", str(sync_time)
-            self.redis.set("SYNC_DATE",
-                           datetime.datetime.fromtimestamp(sync_time).isoformat()
+            self.redis.set("SYNC_TIME", str(sync_time))
+            self.redis.set(
+                "SYNC_DATE",
+                datetime.datetime.fromtimestamp(sync_time).isoformat(),
             )
-                           
+
     @property
     def sync_time(self):
         try:
             return self.redis.get("SYNC_TIME")
-        except(redis.RedisError, KeyError):  # XXX check error
+        except (redis.RedisError, KeyError):  # XXX check error
             return None
 
     def read_auto(self, i=None, unpack=False):
@@ -332,7 +311,10 @@ class EigsepFpga:
         nbytes = CORR_WORD * 2 * NCHAN  # odd/even
         spec = {k: self.fpga.read(f"corr_auto_{k}_dout", nbytes) for k in i}
         if unpack:
-            spec = {k: np.array(struct.unpack(f">{nbytes // CORR_WORD}l", v)) for k, v in spec.items()}
+            spec = {
+                k: np.array(struct.unpack(f">{nbytes // CORR_WORD}l", v))
+                for k, v in spec.items()
+            }
         return spec
 
     def read_cross(self, ij=None, unpack=False):
@@ -350,9 +332,12 @@ class EigsepFpga:
         elif type(ij) is str:
             ij = [ij]
         nbytes = CORR_WORD * 2 * 2 * NCHAN  # odd/even, real/imag
-        spec = {k : self.fpga.read(f"corr_cross_{k}_dout", nbytes) for k in ij}
+        spec = {k: self.fpga.read(f"corr_cross_{k}_dout", nbytes) for k in ij}
         if unpack:
-            spec = {k: np.array(struct.unpack(f">{nbytes // CORR_WORD}l", spec)) for k, v in spec.items()}
+            spec = {
+                k: np.array(struct.unpack(f">{nbytes // CORR_WORD}l", spec))
+                for k, v in spec.items()
+            }
         return spec
 
     def read_data(self, pairs=None, unpack=False):
@@ -365,7 +350,9 @@ class EigsepFpga:
         elif type(pairs) is str:
             pairs = [pairs]
         data = self.read_auto([p for p in pairs if len(p) == 1], unpack=unpack)
-        data.update(self.read_cross([p for p in pairs if len(p) != 1], unpack=unpack))
+        data.update(
+            self.read_cross([p for p in pairs if len(p) != 1], unpack=unpack)
+        )
         return data
 
     def write_file(self, data, cnt, save_dir):
@@ -383,14 +370,12 @@ class EigsepFpga:
             The directory to save the data to.
 
         """
-        # XXX make io interface module, define (non-numpy) binary format
         # XXX any chance of 2 files in same second?
-        # XXX compute from sync_time and cnt, not time.time()
         # check if we need to instantiate a new savefile object
         if self.savefile is None:
             date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             fname = f"{save_dir}/{date}.json"
-            self.savefile = io.File(fname, int(time.time()), self.sync_time)
+            self.savefile = io.File(fname, self.sync_time)
         # add data to buffer
         self.savefile.add_data(data, cnt)
         # write to file if buffer is full
@@ -418,7 +403,6 @@ class EigsepFpga:
         timeout=10,
         update_redis=True,
         write_files=True,
-        save_dir=DATA_PATH,
     ):
         """
         Observe continuously.
@@ -435,8 +419,6 @@ class EigsepFpga:
             Whether to update redis.
         write_files : bool
             Whether to write data to files.
-        save_dir : str
-            The directory to save the data to. Only used if write_files=True.
 
         """
         # XXX make threaded, push/pop integrations from Queue, write integrations
@@ -454,11 +436,13 @@ class EigsepFpga:
                     f"Missed {new_cnt - cnt - 1} integration(s)."
                 )
             cnt = new_cnt
-            self.logger.info(f'Reading acc_cnt={cnt}')
+            self.logger.info(f"Reading acc_cnt={cnt}")
             data = self.read_data(pairs=pairs, unpack=False)
             if cnt != self.fpga.read_int("corr_acc_cnt"):
-                self.logger.error(f"Read of acc_cnt={cnt} FAILED to complete before next integration.")
-            )
+                self.logger.error(
+                    f"Read of acc_cnt={cnt} FAILED to complete before next integration."
+                )
+
             # XXX move these into separate thread to avoid missing integrations
             if update_redis:
                 self.update_redis(data, cnt)
