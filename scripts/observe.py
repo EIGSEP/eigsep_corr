@@ -62,7 +62,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
-logger.basicConfig("snap.log", level=LOG_LEVEL)
+logging.basicConfig(filename="snap.log", level=LOG_LEVEL)
 
 if USE_REF:
     ref = 10
