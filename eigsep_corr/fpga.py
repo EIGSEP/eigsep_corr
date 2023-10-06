@@ -19,46 +19,75 @@ import time
 import numpy as np
 import casperfpga
 from casperfpga.transport_tapcp import TapcpTransport
-from eigsep_corr.blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
+
+from . import io
+from .blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
 
 SNAP_IP = "10.10.10.236"
 SAMPLE_RATE = 500  # MHz
+FPG_FILE = (
+    "/home/eigsep/eigsep_corr/eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg"
+)
 ADC_GAIN = 4
 FFT_SHIFT = 0x0055  # 
 CORR_ACC_LEN = 2**28  # makes corr_acc_cnt increment by ~1 per second
 CORR_SCALAR = 2**9  # correlator uses 8 bits after binary point so 2**9 = 1
 CORR_WORD = 4  # bytes
 DEFAULT_PAM_ATTEN = {0: (8,8), 1: (8,8), 2: (8,8)}
+DEFAULT_POL0_DELAY = 0
 N_FEMS = 0  # set to 0 since they're not initialized from SNAP
 NCHAN = 1024
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 # XXX suggest making the below part of observing script, not module
-#DATA_PATH = "/media/eigsep/T7/data"  # XXX need one for each ssd
+#DATA_PATH = "/media/eigsep/T7/data"
 
 
 class EigsepFpga:
     def __init__(
         self,
         snap_ip=SNAP_IP,
-        fpg_file=None,
+        fpg_file=FPG_FILE,
+        program=False,
+        ref=None,
         transport=TapcpTransport,
         logger=None,
     ):
+        """
+        Class for interfacing with the SNAP board.
+
+        Parameters
+        ----------
+        snap_ip : str
+            The IP address of the SNAP board. The two used for EIGSEP are
+            10.10.10.13 and 10.10.10.236.
+        fpg_file : str
+            The path to the fpg file to program the SNAP with.
+        program : bool
+            Whether to program the SNAP with the fpg file.
+        ref : int
+            The reference clock frequency in MHz. If None, uses the 
+            500 MHz clock on the SNAP board. Typically set to None or 10.
+        transport : casperfpga.transport_tapcp.TapcpTransport
+            The transport protocol to use. The default is TapcpTransport.
+        logger : logging.Logger
+            The logger to use. If None, creates a new logger.
+
+        """
         if logger is None:
-            logging.getLogger().setLevel(logging.DEBUG)
             logger = logging.getLogger(__name__)
+            logging.basicConfig(filename="snap.log", level=logging.DEBUG)
         self.logger = logger
 
+        self.fpg_file = fpg_file
         self.fpga = casperfpga.CasperFpga(snap_ip, transport=transport)
-        if fpg_file is not None:
-            self.fpg_file = fpg_file
+        if program:
             self.fpga.upload_to_ram_and_program(self.fpg_file)
 
         # blocks
-        self.synth = casperfpga.synth.LMX2581(self.fpga, "synth", fosc=10)
+        #self.synth = casperfpga.synth.LMX2581(self.fpga, "synth", fosc=10)
         self.adc = casperfpga.snapadc.SnapAdc(
-            self.fpga, num_chans=2, resolution=8, ref=10
+            self.fpga, num_chans=2, resolution=8, ref=ref
         )
         self.sync = Sync(self.fpga, "sync")
         self.noise = NoiseGen(self.fpga, "noise", nstreams=6)
@@ -70,15 +99,15 @@ class EigsepFpga:
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
         self.redis = redis.Redis(REDIS_HOST, port=REDIS_PORT)
-        try:
-            self.sync_time = float(self.redis.get('SYNC_TIME'))  # time of last sync
-        except(KeyError):  # XXX check this is right error
-            self.sync_time = None
+
+        # io.File object for saving data (gets instantiated in write_file)
+        self.savefile = None
 
     @property
     def metadata(self):
-        return {
-            "SNAP_IP": self.fpga.host,
+        m = {
+            "snap_ip": self.fpga.host,
+            "fpg_version": self.fpga.read_int("version_version"),
             "fpg_file": self.fpg_file,
             "nchan": NCHAN,
             "adc_sample_rate": self.adc.sample_rate,
@@ -93,6 +122,7 @@ class EigsepFpga:
             #"data_path": DATA_PATH,
             "sync_time": self.sync_time,
         }
+        return m
 
     def _run_adc_test(self, test, n_tries):
         """
@@ -154,8 +184,9 @@ class EigsepFpga:
             corr_acc_len=CORR_ACC_LEN,
             corr_scalar=CORR_SCALAR,
             pol0_delay=DEFAULT_POL0_DELAY,
-            n_pams=N_PAMS,
-            n_fems=N_FEMS)
+            pam_atten=DEFAULT_PAM_ATTEN,
+            n_fems=N_FEMS,
+            verify=False):
         """
         Initialize the correlator.
 
@@ -170,7 +201,7 @@ class EigsepFpga:
         for blk in self.blocks:
             blk.initialize()
         # initialize pams
-        self.initialize_pams(N=n_pams)
+        self.initialize_pams(pam_atten=pam_atten)
         self.blocks.extend(self.pams)
         # initialize fems
         self.initialize_fems(N=n_fems)
@@ -181,11 +212,14 @@ class EigsepFpga:
         self.fpga.write_int("corr_acc_len", corr_acc_len)
         self.logger.info(f'Setting CORR_SCALAR: {corr_scalar}')
         self.fpga.write_int("corr_scalar", corr_scalar)
-        self.set_pol0_delay(delay=pol0_delay)
+        if verify:
+            assert self.fpga.read_uint("corr_acc_len") == corr_acc_len
+            assert self.fpga.read_uint("corr_scalar") == corr_scalar
+        self.set_pol0_delay(delay=pol0_delay, verify=verify)
 
-    def set_pol0_delay(self, delay):
+    def set_pol0_delay(self, delay, verify=False):
         """
-        Set the delay for the pol0 input.
+        Set the delay for the pol0 and pol1 inputs.
 
         Parameters
         ----------
@@ -196,6 +230,8 @@ class EigsepFpga:
         # XXX did we delay both 0 and 1?
         self.logger.info(f'Setting POL0_DELAY: {delay}')
         self.fpga.write_int("pfb_pol0_delay", delay)
+        if verify:
+            assert self.fpga.read_uint("pfb_pol0_delay") == delay
 
     def initialize_pams(self, attenuation=DEFAULT_PAM_ATTEN):
         """
@@ -214,6 +250,7 @@ class EigsepFpga:
             self.logger.info(f'Setting pam{p} attenuation to ({att_e},{att_n})')
             pam.set_attenuation(att_e, att_n)
             self.pams.append(pam)
+        self.blocks.extend(self.pams)
 
     def initialize_fems(self, N=N_FEMS):
         """
@@ -229,6 +266,7 @@ class EigsepFpga:
         self.fems = [Fem(self.fpga, f"i2c_ant{i}") for i in range(N)]
         for fem in self.fems:
             fem.initialize()
+        self.blocks.extend(self.fems)
 
     def initialize(
         self,
@@ -269,6 +307,13 @@ class EigsepFpga:
             self.redis.set("SYNC_DATE",
                            datetime.datetime.fromtimestamp(sync_time).isoformat()
             )
+                           
+    @property
+    def sync_time(self):
+        try:
+            return self.redis.get("SYNC_TIME")
+        except(redis.RedisError, KeyError):  # XXX check error
+            return None
 
     def read_auto(self, i=None, unpack=False):
         """
@@ -323,32 +368,35 @@ class EigsepFpga:
         data.update(self.read_cross([p for p in pairs if len(p) != 1], unpack=unpack))
         return data
 
-    def write_file(self, data, cnt, nspec, save_dir):
+    def write_file(self, data, cnt, save_dir):
         """
-        Write the data to a file.
+        Write data to file. Stores data to a buffer until the buffer is full,
+        then writes to file and instantiates a new savefile object.
 
         Parameters
         ----------
         data : dict
-            Dictionary of data to write.
+            The data to write to file.
         cnt : int
-            Correlation accumulation count.
-        nspec : int
-            Number of spectra to write to file before creating a new file.
+            The acc count of the data.
         save_dir : str
-            Directory to save data to.
+            The directory to save the data to.
 
         """
         # XXX make io interface module, define (non-numpy) binary format
-        self.buffer[f"{cnt}"] = data  # XXX don't attach to self
-        if cnt > self.save_cnt + nspec:
-            # XXX any chance of 2 files in same second?
-            # XXX compute from sync_time and cnt
+        # XXX any chance of 2 files in same second?
+        # XXX compute from sync_time and cnt, not time.time()
+        # check if we need to instantiate a new savefile object
+        if self.savefile is None:
             date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            fname = f"{save_dir}/{date}.npz"
-            np.savez(fname, **self.metadata, **self.buffer)
-            self.buffer = {}
-            self.save_cnt = cnt
+            fname = f"{save_dir}/{date}.json"
+            self.savefile = io.File(fname, int(time.time()), self.sync_time)
+        # add data to buffer
+        self.savefile.add_data(data, cnt)
+        # write to file if buffer is full
+        if cnt > self.savefile.max_cnt:
+            self.savefile.write()
+            self.savefile = None  # reset savefile object
 
     def update_redis(self, data, cnt):
         """Update redis database with data from first half ("even")
@@ -365,19 +413,19 @@ class EigsepFpga:
 
     def observe(
         self,
-        dest_dir,
+        save_dir,
         pairs=None,
         timeout=10,
         update_redis=True,
         write_files=True,
-        nspec=60,
+        save_dir=DATA_PATH,
     ):
         """
         Observe continuously.
 
         Parameters
         ----------
-        dest_dir: str
+        save_dir: str
             Destination directory to write files.
         pairs : list
             List of pairs to read. Default is None, which reads all pairs.
@@ -387,17 +435,15 @@ class EigsepFpga:
             Whether to update redis.
         write_files : bool
             Whether to write data to files.
-        nspec : int
-            Number of spectra to write to file before creating a new file.
+        save_dir : str
+            The directory to save the data to. Only used if write_files=True.
 
         """
         # XXX make threaded, push/pop integrations from Queue, write integrations
         # as they arrive and finish files/start new ones
         cnt = self.fpga.read_int("corr_acc_cnt")
         t = time.time()
-        if write_files:
-            self.save_cnt = cnt
-            self.buffer = {}  # XXX used?
+
         while time.time() < t + timeout:
             new_cnt = self.fpga.read_int("corr_acc_cnt")
             if new_cnt == cnt:
@@ -417,5 +463,6 @@ class EigsepFpga:
             if update_redis:
                 self.update_redis(data, cnt)
             if write_files:
-                self.write_file(data, cnt, nspec, dest_dir)
+                self.savefile = None
+                self.write_file(data, cnt, save_dir)
             t = time.time()

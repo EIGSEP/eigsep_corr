@@ -2,6 +2,7 @@
 *.venv/
 build/
 *.egg-info/
-eigsep_fengine_1g_v*/
+snap_fengines/eigsep_fengine_1g_v*/
+snap_fengines/golden_1g_v1_0/
 notebooks/.ipynb_checkpoints/
 *.npz

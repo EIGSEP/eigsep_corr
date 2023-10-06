@@ -3,16 +3,18 @@ import logging
 import IPython
 from eigsep_corr.fpga import EigsepFpga
 
-SNAP_IP = "10.10.10.236"
-# fpg_filename = "eigsep_fengine_1g_v1_0_2022-08-26_1007.fpg"
-fpg_filename = "eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg"
+SNAP_IP = "10.10.10.13"
+#SNAP_IP = "10.10.10.236"
+fpg_filename = "eigsep_fengine_1g_v2_1_2023-10-05_1148.fpg"
 FPG_FILE = "/home/eigsep/eigsep/eigsep_corr/" + fpg_filename
-FPG_VERSION = 0x10000
+FPG_VERSION = 0x20001
 SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
 CORR_SCALAR = 2**9
+INPUT_DELAY = 0
 FFT_SHIFT = 0x0055
+USE_REF = False  # use reference input
 USE_NOISE = False  # use digital noise instead of ADC data
 LOG_LEVEL = logging.DEBUG
 N_PAMS = 0  # number of PAMs to initialize (0-3)
@@ -59,16 +61,21 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-logging.getLogger().setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
+logging.basicConfig(filename="snap.log", level=LOG_LEVEL)
 
-if args.program:
-    fpga = EigsepFpga(SNAP_IP, fpg_file=FPG_FILE, logger=logger)
+if USE_REF:
+    ref = 10
 else:
-    fpga = EigsepFpga(SNAP_IP, logger=logger)
+    ref = None
+
+fpga = EigsepFpga(
+    SNAP_IP, fpg_file=FPG_FILE, program=args.program, ref=ref, logger=logger
+)
 
 # check version
-assert fpga.fpga.read_int("version_version") == FPG_VERSION
+#print(fpga.fpga.read_int("version_version"))
+#assert fpga.fpga.read_int("version_version") == FPG_VERSION
 
 if args.initialize:
     fpga.initialize(
@@ -77,6 +84,7 @@ if args.initialize:
         pfb_fft_shift=FFT_SHIFT,
         corr_acc_len=CORR_ACC_LEN,
         corr_scalar=CORR_SCALAR,
+        input_delay=INPUT_DELAY,
         n_pams=N_PAMS,
         n_fems=N_FEMS,
     )
