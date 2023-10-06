@@ -219,7 +219,7 @@ class EigsepFpga:
             assert self.fpga.read_uint("corr_scalar") == corr_scalar
         self.set_pol0_delay(delay=pol0_delay, verify=verify)
 
-    def set_pol0_delay(self, delay, verify=False):
+    def set_pol01_delay(self, delay, verify=False):
         """
         Set the delay for the pol0 and pol1 inputs.
 
@@ -229,7 +229,7 @@ class EigsepFpga:
             The delay in clock cycles.
 
         """
-        self.logger.info(f"Setting POL0_DELAY: {delay}")
+        self.logger.info(f"Setting POL01_DELAY: {delay}")
         self.fpga.write_int("pfb_pol0_delay", delay)
         if verify:
             assert self.fpga.read_uint("pfb_pol0_delay") == delay

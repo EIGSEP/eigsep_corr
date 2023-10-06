@@ -9,17 +9,15 @@ HEADER = {
     "nfiles": 60,  # number of integrations per file # XXX make ntimes, make dynamic
     "dtype": "int32",  # data type
     "byteorder": ">",  # endianess of data
-    #"snap_ip": "10.10.10.236",  # IP address of SNAP board  # XXX not necessary for data
     "nchan": 1024,  # number of frequency channels
     "fpg_file": "eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg",
     "fpg_version": 0x1000,
-    "sample_rate": 500,  # in MHz # XXX make Hz
+    "sample_rate": int(500e6),  # in Hz
     "gain": 4,  # gain of ADC
     "corr_acc_len": 2**28,  # number of samples to accumulate
     "corr_scalar": 2**9,  # 2^9 = 1, using 8 bits after binary point
     "pol01_delay": 0,  # delay in sample clocks of inputs 0/1
-    # XXX add PAM attenuations
-    #"pol1_delay": 0,  # delay in sample clocks of input 0
+    "pam_atten": {0: (8, 8), 1: (8, 8), 2: (8, 8)},  # PAM attenuations
     "fft_shift": 0x0055,
     "inputs": [0, 1, 2, 3, 4, 5],  # inputs used
     # XXX add inttime, freq0, freq resolution
@@ -56,14 +54,11 @@ class File:
     def __init__(self, fname, sync_time):
         self.fname = fname
         self.header = HEADER
+        self.header["sync_time"] = sync_time  # XXX account for this in size
         self.time = 0  # XXX compute from sync_time and count
         self.sync_time = sync_time
         self.dtype = DTYPE
-        self.data = {
-            "header": self.header,
-            "time": self.time,
-            "sync_time": self.sync_time,  # XXX should be in header
-        }
+        self.data = {"header": self.header, "time": self.time}
         self.max_cnt = None
 
     def add_data(self, data, cnt):
@@ -87,15 +82,15 @@ class File:
         """
         with open(self.fname, "rb") as fh:
             header_size = get_header_size(fh, self.dtype)
-            fh.seek(0, 0)  # go to beginning of file # XXX includes 4B of headersize
+            fh.seek(4, 0)  # go to beginning of header, after ``header size''
             header = fh.read(header_size)
         return json.loads(header)
 
     def read_data(self):
         with open(self.fname, "rb") as fh:
             header_size = get_header_size(fh, self.dtype)
-            fh.seek(
-                header_size, 0
-            )  # go to beginning of data #XXX need to add size of time (32 bit)
+            # move past ``header size'', header, and ``time''
+            data_start = 4 + header_size + 4
+            fh.seek(data_start, 0)  # go to beginning of data
             data = json.load(fh)
         return data
