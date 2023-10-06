@@ -12,7 +12,7 @@ from .blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
 
 SNAP_IP = "10.10.10.236"
 FPG_FILE = (
-    "/home/eigsep/eigsep_corr/eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg"
+    "/home/eigsep/eigsep_corr/eigsep_fengine_1g_v2_1_2023-10-05_1148.fpg"
 )
 SAMPLE_RATE = 500
 ADC_GAIN = 4
