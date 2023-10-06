@@ -49,10 +49,10 @@ def get_header_size(fh, dtype):
 
 
 class File:
-    def __init__(self, fname, time, sync_time):
+    def __init__(self, fname, sync_time):
         self.fname = fname
         self.header = HEADER
-        self.time = time  # 32 bit integer, #XXX check endianess
+        self.time = 0  # XXX compute from sync_time and count
         self.sync_time = sync_time
         self.dtype = DTYPE
         self.data = {
