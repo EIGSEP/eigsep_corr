@@ -15,7 +15,9 @@ import datetime
 import logging
 import redis
 import struct
+from threading import Event, Thread
 import time
+from queue import Queue
 import numpy as np
 import casperfpga
 from casperfpga.transport_tapcp import TapcpTransport
@@ -39,8 +41,6 @@ N_FEMS = 0  # set to 0 since they're not initialized from SNAP
 NCHAN = 1024
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
-# XXX suggest making the below part of observing script, not module
-# DATA_PATH = "/media/eigsep/T7/data"
 
 
 class EigsepFpga:
@@ -120,7 +120,7 @@ class EigsepFpga:
             "n_fems": len(self.fems),
             "sync_time": self.sync_time,
         }
-        for i, pam in self.pams:
+        for i, pam in enumerate(self.pams):
             m[f"pam{i}_attenuation"] = pam.get_attenuation()
         return m
 
@@ -291,7 +291,7 @@ class EigsepFpga:
     def sync_time(self):
         try:
             return self.redis.get("SYNC_TIME")
-        except (redis.RedisError, KeyError):  # XXX check error
+        except KeyError:
             return None
 
     def read_auto(self, i=None, unpack=False):
@@ -355,34 +355,6 @@ class EigsepFpga:
         )
         return data
 
-    def write_file(self, data, cnt, save_dir):
-        """
-        Write data to file. Stores data to a buffer until the buffer is full,
-        then writes to file and instantiates a new savefile object.
-
-        Parameters
-        ----------
-        data : dict
-            The data to write to file.
-        cnt : int
-            The acc count of the data.
-        save_dir : str
-            The directory to save the data to.
-
-        """
-        # XXX any chance of 2 files in same second?
-        # check if we need to instantiate a new savefile object
-        if self.savefile is None:
-            date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            fname = f"{save_dir}/{date}.json"
-            self.savefile = io.File(fname, self.sync_time)
-        # add data to buffer
-        self.savefile.add_data(data, cnt)
-        # write to file if buffer is full
-        if cnt > self.savefile.max_cnt:
-            self.savefile.write()
-            self.savefile = None  # reset savefile object
-
     def update_redis(self, data, cnt):
         """Update redis database with data from first half ("even")
         integrations."""
@@ -395,6 +367,25 @@ class EigsepFpga:
         self.redis.set("ACC_CNT", cnt)
         self.redis.set("updated_unix", int(time.time()))
         self.redis.set("updated_date", datetime.datetime.now().isoformat())
+
+    def record_data(self, write_files=True, update_redis=True):
+        """
+        Pop data from the queue and write to files and/or redis.
+
+        Parameters
+        ----------
+        write_files : bool
+            Whether to write data to files.
+        update_redis : bool
+            Whether to update redis.
+
+        """
+        while not self.event.is_set() or not self.queue.empty():
+            data, cnt = self.queue.get()
+            if write_files:
+                pass  # XXX
+            if update_redis:
+                self.update_redis(data, cnt)
 
     def observe(
         self,
@@ -421,32 +412,37 @@ class EigsepFpga:
             Whether to write data to files.
 
         """
-        # XXX make threaded, push/pop integrations from Queue, write integrations
-        # as they arrive and finish files/start new ones
+        self.queue = Queue(maxsize=0)  # XXX infinite size
+        self.event = Event()
+        rec = Thread(target=self.record_data, args=(write_files, update_redis))
+        rec.start()
+
         cnt = self.fpga.read_int("corr_acc_cnt")
         t = time.time()
 
-        while time.time() < t + timeout:
-            new_cnt = self.fpga.read_int("corr_acc_cnt")
-            if new_cnt == cnt:
-                time.sleep(0.01)
-                continue
-            if new_cnt > cnt + 1:
-                self.logger.warning(
-                    f"Missed {new_cnt - cnt - 1} integration(s)."
-                )
-            cnt = new_cnt
-            self.logger.info(f"Reading acc_cnt={cnt}")
-            data = self.read_data(pairs=pairs, unpack=False)
-            if cnt != self.fpga.read_int("corr_acc_cnt"):
-                self.logger.error(
-                    f"Read of acc_cnt={cnt} FAILED to complete before next integration."
-                )
-
-            # XXX move these into separate thread to avoid missing integrations
-            if update_redis:
-                self.update_redis(data, cnt)
-            if write_files:
-                self.savefile = None
-                self.write_file(data, cnt, save_dir)
-            t = time.time()
+        try:
+            while time.time() < t + timeout:
+                new_cnt = self.fpga.read_int("corr_acc_cnt")
+                if new_cnt == cnt:
+                    time.sleep(0.01)
+                    continue
+                if new_cnt > cnt + 1:
+                    self.logger.warning(
+                        f"Missed {new_cnt - cnt - 1} integration(s)."
+                    )
+                cnt = new_cnt
+                self.logger.info(f"Reading acc_cnt={cnt}")
+                data = self.read_data(pairs=pairs, unpack=False)
+                if cnt != self.fpga.read_int("corr_acc_cnt"):
+                    self.logger.error(
+                        f"Read of acc_cnt={cnt} FAILED to complete before "
+                        "next integration."
+                    )
+                self.queue.put({"data": data, "cnt": cnt})
+                t = time.time()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.event.set()
+            rec.join()
+            self.logger.info("Done observing.")
