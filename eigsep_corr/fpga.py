@@ -226,7 +226,7 @@ class EigsepFpga:
         Parameters
         ----------
         delay : int
-            The delay in clock cycles.
+            The delay in clock cycles. Must be between 0 and 1023 (2^10 - 1).
 
         """
         self.logger.info(f"Setting POL01_DELAY: {delay}")
