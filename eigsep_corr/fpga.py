@@ -106,22 +106,20 @@ class EigsepFpga:
     @property
     def metadata(self):
         m = {
-            "snap_ip": self.fpga.host,
-            "fpg_version": self.fpga.read_int("version_version"),
-            "fpg_file": self.fpg_file,
             "nchan": NCHAN,
-            "adc_sample_rate": self.adc.sample_rate,
-            "adc_gain": self.adc.gain,
-            "fft_shift": self.pfb.fft_shift,
+            "fpg_file": self.fpg_file,
+            "fpg_version": self.fpga.read_int("version_version"),
+            "sample_rate": self.adc.sample_rate,
+            "gain": self.adc.gain,
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
-            "pol0_delay": self.fpga.read_uint("pfb_pol0_delay"),
-            "n_pams": len(self.pams),
-            "n_fems": len(self.fems),
+            "pol01_delay": self.fpga.read_uint("pfb_pol0_delay"),
+            "pam_atten": {
+                int(i): p.get_attenuation() for i, p in enumerate(self.pams)
+            },
+            "fft_shift": self.pfb.fft_shift,
             "sync_time": self.sync_time,
         }
-        for i, pam in enumerate(self.pams):
-            m[f"pam{i}_attenuation"] = pam.get_attenuation()
         return m
 
     def _run_adc_test(self, test, n_tries):
@@ -226,7 +224,7 @@ class EigsepFpga:
         Parameters
         ----------
         delay : int
-            The delay in clock cycles. Must be between 0 and 1023 (2^10 - 1).
+            The delay in clock cycles. Max 1024 (2^10).
 
         """
         self.logger.info(f"Setting POL01_DELAY: {delay}")
@@ -286,13 +284,6 @@ class EigsepFpga:
                 "SYNC_DATE",
                 datetime.datetime.fromtimestamp(sync_time).isoformat(),
             )
-
-    @property
-    def sync_time(self):
-        try:
-            return self.redis.get("SYNC_TIME")
-        except KeyError:
-            return None
 
     def read_auto(self, i=None, unpack=False):
         """
@@ -383,7 +374,7 @@ class EigsepFpga:
         while not self.event.is_set() or not self.queue.empty():
             data, cnt = self.queue.get()
             if write_files:
-                pass  # XXX
+                self.file.add_data(data, cnt)
             if update_redis:
                 self.update_redis(data, cnt)
 
@@ -394,6 +385,8 @@ class EigsepFpga:
         timeout=10,
         update_redis=True,
         write_files=True,
+        ntimes=io.DEFAULT_NTIMES,
+        header=io.DEFAULT_HEADER,
     ):
         """
         Observe continuously.
@@ -410,8 +403,18 @@ class EigsepFpga:
             Whether to update redis.
         write_files : bool
             Whether to write data to files.
+        ntimes : int
+            Number of integrations to write to each file. Default is
+            io.DEFAULT_NTIMES (60).
+        header : dict
+            Header to write to each file. Default is io.DEFAULT_HEADER.
 
         """
+        if write_files:
+            # update header
+            for k, v in self.metadata.items():
+                header[k] = v
+            self.file = io.File(save_dir, ntimes=ntimes, header=header)
         self.queue = Queue(maxsize=0)  # XXX infinite size
         self.event = Event()
         rec = Thread(target=self.record_data, args=(write_files, update_redis))
