@@ -485,7 +485,7 @@ class EigsepFpga:
                     self.logger.info(f"Wrote file {filename}")
         if self.file is not None and len(self.file) > 0:
             self.logger.info("Writing short final file.")
-            self.file.write()
+            self.file.corr_write()
 
         thd.join()
         self.logger.info("Done observing.")

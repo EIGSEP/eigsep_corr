@@ -172,7 +172,17 @@ def read_file(filename, header=None, nspec=-1, skip=0):
 
 
 def write_file(filename, header, data):
-    with open(filename, 'wb') as fh:
+    """
+    Write binary data to file.
+
+    Parameters
+    ----------
+    filename : str
+    header : dict
+    data : dict
+
+    """
+    with open(filename, "wb") as fh:
         _write_raw_header(fh, header)
         if type(data) is bytes:
             fh.write(data)
@@ -207,8 +217,7 @@ class File:
         else:
             return None
 
-    # XXX maybe call this corr_write
-    def write(self, fname=None):
+    def corr_write(self, fname=None):
         if fname is None:
             date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             fname = os.path.join(self.save_dir, f"{date}.eig")
