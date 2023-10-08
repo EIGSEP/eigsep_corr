@@ -19,8 +19,12 @@ from threading import Event, Thread
 import time
 from queue import Queue
 import numpy as np
-import casperfpga
-from casperfpga.transport_tapcp import TapcpTransport
+try:
+    import casperfpga
+    from casperfpga.transport_tapcp import TapcpTransport
+except(ImportError):
+    logging.warning("Running without casperfpga installed")
+    TapcpTransport = None
 
 from . import io
 from .blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync

@@ -1,7 +1,9 @@
 import argparse
 import logging
+
 from eigsep_corr.fpga import EigsepFpga
 
+DUMMY_MODE = False
 # SNAP_IP = "10.10.10.13"
 SNAP_IP = "10.10.10.236"
 fpg_filename = "eigsep_fengine_1g_v2_2_2023-10-06_1806.fpg"
@@ -19,6 +21,9 @@ PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}
 N_FEMS = 0  # number of FEMs to initialize (0-3)
 SAVE_DIR = "/media/eigsep/T7/data"
 LOG_LEVEL = logging.DEBUG
+
+if DUMMY_Mode:
+    from eigsep_corr.testing import DummyEigsepFpga as EigsepFpga
 
 parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
