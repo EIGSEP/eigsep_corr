@@ -1,13 +1,12 @@
 import argparse
 import logging
-import IPython
 from eigsep_corr.fpga import EigsepFpga
 
 SNAP_IP = "10.10.10.13"
 # SNAP_IP = "10.10.10.236"
-fpg_filename = "eigsep_fengine_1g_v2_1_2023-10-05_1148.fpg"
+fpg_filename = "eigsep_fengine_1g_v2_2_2023-10-06_1806.fpg"
 FPG_FILE = "/home/eigsep/eigsep/eigsep_corr/" + fpg_filename
-FPG_VERSION = 0x20001
+FPG_VERSION = 0x20002
 SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
@@ -16,9 +15,10 @@ POL0_DELAY = 0
 FFT_SHIFT = 0x0055
 USE_REF = False  # use reference input
 USE_NOISE = False  # use digital noise instead of ADC data
-LOG_LEVEL = logging.DEBUG
 PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}
 N_FEMS = 0  # number of FEMs to initialize (0-3)
+SAVE_DIR = "/media/eigsep/data"
+LOG_LEVEL = logging.DEBUG
 
 parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
@@ -32,8 +32,15 @@ parser.add_argument(
     help="program eigsep correlator",
 )
 parser.add_argument(
-    "-i",
-    dest="initialize",
+    "-a",
+    dest="initialize_adc",
+    action="store_true",
+    default=False,
+    help="initialize ADCs",
+)
+parser.add_argument(
+    "-f",
+    dest="initialize_fpga",
     action="store_true",
     default=False,
     help="initialize eigsep correlator",
@@ -73,12 +80,11 @@ fpga = EigsepFpga(
     SNAP_IP, fpg_file=FPG_FILE, program=args.program, ref=ref, logger=logger
 )
 
-# check version
-# print(fpga.fpga.read_int("version_version"))
-# assert fpga.fpga.read_int("version_version") == FPG_VERSION
 
-if args.initialize:
+if args.initialize_adc:
     fpga.initialize_adc(adc_sample_rate=SAMPLE_RATE, adc_gain=GAIN)
+
+if args.initialize_fpga:
     fpga.initialize_fpga(
         fft_shift=FFT_SHIFT,
         corr_acc_len=CORR_ACC_LEN,
@@ -87,7 +93,9 @@ if args.initialize:
         pam_atten=PAM_ATTEN,
         n_fems=N_FEMS,
     )
-    fpga.synchronize(update_redis=args.update_redis)
+
+# check version
+assert fpga.fpga.read_int("version_version") == FPG_VERSION
 
 # set input
 fpga.noise.set_seed(stream=None, seed=0)
@@ -104,15 +112,18 @@ else:
 
 # synchronize
 if args.sync:
-    fpga.synchronize(delay=0)
+    fpga.synchronize(delay=0, update_redis=args.update_redis)
 
-print("observing ...")
+print("Observing ...")
 try:
     fpga.observe(
+        SAVE_DIR,
+        pairs=None,
+        timeout=10,
         update_redis=args.update_redis,
         write_files=args.write_files,
-        timeout=10,
     )
 except KeyboardInterrupt:
-    pass
-IPython.embed()
+    print("Exiting.")
+finally:
+    fpga.event.set()
