@@ -76,7 +76,7 @@ class EigsepFpga:
         """
         if logger is None:
             logger = logging.getLogger(__name__)
-            logging.basicConfig(filename="snap.log", level=logging.DEBUG)
+            logger.setLevel(logging.DEBUG)
         self.logger = logger
 
         self.fpg_file = fpg_file
@@ -423,29 +423,25 @@ class EigsepFpga:
         cnt = self.fpga.read_int("corr_acc_cnt")
         t = time.time()
 
-        try:
-            while time.time() < t + timeout:
-                new_cnt = self.fpga.read_int("corr_acc_cnt")
-                if new_cnt == cnt:
-                    time.sleep(0.01)
-                    continue
-                if new_cnt > cnt + 1:
-                    self.logger.warning(
-                        f"Missed {new_cnt - cnt - 1} integration(s)."
-                    )
-                cnt = new_cnt
-                self.logger.info(f"Reading acc_cnt={cnt}")
-                data = self.read_data(pairs=pairs, unpack=False)
-                if cnt != self.fpga.read_int("corr_acc_cnt"):
-                    self.logger.error(
-                        f"Read of acc_cnt={cnt} FAILED to complete before "
-                        "next integration."
-                    )
-                self.queue.put({"data": data, "cnt": cnt})
-                t = time.time()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.event.set()
-            rec.join()
-            self.logger.info("Done observing.")
+        while time.time() < t + timeout and not self.event.is_set():
+            new_cnt = self.fpga.read_int("corr_acc_cnt")
+            if new_cnt == cnt:
+                time.sleep(0.01)
+                continue
+            if new_cnt > cnt + 1:
+                self.logger.warning(
+                    f"Missed {new_cnt - cnt - 1} integration(s)."
+                )
+            cnt = new_cnt
+            self.logger.info(f"Reading acc_cnt={cnt}")
+            data = self.read_data(pairs=pairs, unpack=False)
+            if cnt != self.fpga.read_int("corr_acc_cnt"):
+                self.logger.error(
+                    f"Read of acc_cnt={cnt} FAILED to complete before "
+                    "next integration."
+                )
+            self.queue.put({"data": data, "cnt": cnt})
+            t = time.time()
+
+        rec.join()
+        self.logger.info("Done observing.")
