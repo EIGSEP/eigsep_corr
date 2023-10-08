@@ -38,7 +38,7 @@ FPG_FILE = (
 )
 FPG_VERSION = (2, 2)  # major, minor
 ADC_GAIN = 4
-FFT_SHIFT = 0x0055  #
+FFT_SHIFT = 0x0055
 CORR_ACC_LEN = 2**28  # makes corr_acc_cnt increment by ~1 per second
 CORR_SCALAR = 2**9  # correlator uses 8 bits after binary point so 2**9 = 1
 CORR_WORD = 4  # bytes
@@ -129,7 +129,7 @@ class EigsepFpga:
         m = {
             "nchan": NCHAN,
             "fpg_file": self.fpg_file,
-            "fpg_version": self.version,
+            "fpg_version": self.fpga.read_uint("version_version"),
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
             "pol01_delay": self.fpga.read_uint("pfb_pol0_delay"),
@@ -203,7 +203,7 @@ class EigsepFpga:
         self.adc.adc.selectInput([1, 1, 3, 3])  # XXX allow as input arg?
         self.adc.set_gain(gain)
 
-        self.adc.sample_rate = sample_rate
+        self.adc.sample_rate = int(sample_rate * 1e6)  # in Hz
         self.adc.gain = gain
         self.adc_initialized = True
 
@@ -316,6 +316,7 @@ class EigsepFpga:
             )
         self.is_synchronized = True
 
+    # XXX check read_auto(i=[])
     def read_auto(self, i=None, unpack=False):
         """
         Read the i'th (counting from 0) autocorrelation spectrum.
@@ -339,6 +340,7 @@ class EigsepFpga:
             }
         return spec
 
+    # XXX check read_cross(ij=[])
     def read_cross(self, ij=None, unpack=False):
         """
         Read the cross correlation spectrum between inputs i and j.
