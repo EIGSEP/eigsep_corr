@@ -85,7 +85,6 @@ class EigsepFpga:
             self.fpga.upload_to_ram_and_program(self.fpg_file)
 
         # blocks
-        # self.synth = casperfpga.synth.LMX2581(self.fpga, "synth", fosc=10)
         self.adc = casperfpga.snapadc.SnapAdc(
             self.fpga, num_chans=2, resolution=8, ref=ref
         )
@@ -100,38 +99,38 @@ class EigsepFpga:
 
         self.redis = redis.Redis(REDIS_HOST, port=REDIS_PORT)
 
+        self.adc_initialized = False
+        self.pams_initialized = False
+        self.is_synchronized = False
 
     @property
     def version(self):
         val = self.fpga.read_uint("version_version")
         major = val >> 16
-        minor = val & 0xffff
+        minor = val & 0xFFFF
         return (major, minor)
 
     @property
     def metadata(self):
-        # XXX fix this
-        try:
-            sample_rate = self.adc.sample_rate
-            gain = self.adc.gain
-        except AttributeError:  # these aren't set if ADC not initialized
-            sample_rate = 0
-            gain = 0
-        return {
+        m = {
             "nchan": NCHAN,
             "fpg_file": self.fpg_file,
             "fpg_version": self.version,
-            "sample_rate": sample_rate,
-            "gain": gain,
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
             "pol01_delay": self.fpga.read_uint("pfb_pol0_delay"),
-            "pam_atten": {
-                int(i): p.get_attenuation() for i, p in enumerate(self.pams)
-            },
             "fft_shift": self.pfb.get_fft_shift(),
-            "sync_time": self.sync_time,
         }
+        if self.adc_initialized:
+            m["sample_rate"] = self.adc.sample_rate
+            m["gain"] = self.adc.gain
+        if self.pams_initialized:
+            m["pam_atten"] = {
+                int(i): p.get_attenuation() for i, p in enumerate(self.pams)
+            }
+        if self.is_synchronized:
+            m["sync_time"] = self.sync_time
+        return m
 
     def _run_adc_test(self, test, n_tries):
         """
@@ -181,7 +180,6 @@ class EigsepFpga:
         """
         self.logger.info("Initializing ADCs")
         self.adc.init(sample_rate=sample_rate)
-        self.adc.sample_rate = sample_rate
 
         self._run_adc_test(self.adc.alignLineClock, n_tries=n_tries)
         self._run_adc_test(self.adc.alignFrameClock, n_tries=n_tries)
@@ -190,7 +188,10 @@ class EigsepFpga:
         self.adc.selectADC()
         self.adc.adc.selectInput([1, 1, 3, 3])  # XXX allow as input arg?
         self.adc.set_gain(gain)
+
+        self.adc.sample_rate = sample_rate
         self.adc.gain = gain
+        self.adc_initialized = True
 
     def initialize_fpga(
         self,
@@ -266,6 +267,7 @@ class EigsepFpga:
             pam.set_attenuation(att_e, att_n)
             self.pams.append(pam)
         self.blocks.extend(self.pams)
+        self.pams_initialized = True
 
     def initialize_fems(self, N=N_FEMS):
         """
@@ -282,6 +284,7 @@ class EigsepFpga:
         for fem in self.fems:
             fem.initialize()
         self.blocks.extend(self.fems)
+        self.fems_initialized = True
 
     def synchronize(self, delay=0, update_redis=True):
         self.sync.set_delay(delay)
@@ -297,6 +300,7 @@ class EigsepFpga:
                 "SYNC_DATE",
                 datetime.datetime.fromtimestamp(sync_time).isoformat(),
             )
+        self.is_synchronized = True
 
     def read_auto(self, i=None, unpack=False):
         """
@@ -385,7 +389,9 @@ class EigsepFpga:
 
         """
         while not self.event.is_set() or not self.queue.empty():
-            data, cnt = self.queue.get()
+            d = self.queue.get()
+            data = d["data"]
+            cnt = d["cnt"]
             if write_files:
                 self.file.add_data(data, cnt)
             if update_redis:
