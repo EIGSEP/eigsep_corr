@@ -186,6 +186,6 @@ class File:
 
     def write(self):
         date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        fname = f"{self.save_dir}/{date}.json"
+        fname = os.path.join(self.save_dir, f"{date}.json")
         packed_data = pack_corr_data(self.buffer, self.header)
         write_file(fname, self.header, packed_data)
