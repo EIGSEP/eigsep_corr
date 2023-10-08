@@ -22,6 +22,9 @@ DEFAULT_HEADER = {
     "pol01_delay": 0,  # delay in sample clocks of inputs 0/1
     "pam_atten": {0: (8, 8), 1: (8, 8), 2: (8, 8)},  # PAM attenuations
     "fft_shift": 0x0055,
+    # XXX need to remove _r, _i and match how real/imag are handled in fpga.py
+    # which is that crosses have double the length of autos, and real/imag in
+    # a final (size 2) dimension
     "pairs": ['0', '1', '2', '3', '4', '5',
               '02_r', '02_i', '04_r', '04_i', '24_r', '24_i'
               '13_r', '13_i', '15_r', '15_i', '35_r', '35_i'],
@@ -97,6 +100,7 @@ def read_header(filename):
 def unpack_raw_data(buf, npairs=18, acc_bins=2, nchan=1024, dtype=('int32', '>')):
     dt = build_dtype(*dtype)
     data = np.frombuffer(buf, dtype=dt)
+    # XXX update npairs calculation for real/imag
     data.shape = (-1, npairs, acc_bins, nchan)
     return data
 
@@ -109,6 +113,7 @@ def pack_raw_data(data, dtype=('int32', '>')):
 
 def unpack_data(fh_buf, h, nspec=-1, skip=0):
     dt = build_dtype(*h['dtype'])
+    # XXX migrate real/imag handling, use calc_integration_len
     integration_len = (
         dt.itemsize * h['acc_bins'] * h['nchan'] * len(h['pairs'])
     )
@@ -122,6 +127,7 @@ def unpack_data(fh_buf, h, nspec=-1, skip=0):
             buf = fh.read()
         else:
             buf = fh.read(nspec * integration_len)
+    # XXX match real/imag handling in fpga.py
     data = unpack_raw_data(
         buf,
         len(h['pairs']),
@@ -129,11 +135,13 @@ def unpack_data(fh_buf, h, nspec=-1, skip=0):
         nchan=h['nchan'],
         dtype=h['dtype'],
     )
+    # XXX match real/imag handling in fpga.py
     data = {p: data[:, i] for i, p in enumerate(h['pairs'])}
     return data
 
 
 def pack_data(data, h):
+    # XXX match real/imag handling in fpga.py
     data = np.array([data[k] for k in h['pairs']]).transpose(1, 0, 2, 3)
     buf = pack_raw_data(data, dtype=h['dtype'])
     return buf
@@ -143,6 +151,7 @@ def pack_corr_data(dict_list, h):
     """
     For use with a list of dicts of binary data read straight from correlator.
     """
+    # XXX match real/imag handling in fpga.py
     buf = ''.join([d[k] for d in dict_list for k in h['pairs']])
     return buf
 
