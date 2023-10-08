@@ -3,7 +3,6 @@ import logging
 
 from eigsep_corr.fpga import EigsepFpga
 
-DUMMY_MODE = False
 # SNAP_IP = "10.10.10.13"
 SNAP_IP = "10.10.10.236"
 fpg_filename = "eigsep_fengine_1g_v2_2_2023-10-06_1806.fpg"
@@ -22,12 +21,16 @@ N_FEMS = 0  # number of FEMs to initialize (0-3)
 SAVE_DIR = "/media/eigsep/T7/data"
 LOG_LEVEL = logging.DEBUG
 
-if DUMMY_Mode:
-    from eigsep_corr.testing import DummyEigsepFpga as EigsepFpga
-
 parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument(
+    "--dummy",
+    dest="dummy_mode",
+    action="store_true",
+    default=False,
+    help="Run with a dummy SNAP interface",
 )
 parser.add_argument(
     "-p",
@@ -81,6 +84,10 @@ if USE_REF:
 else:
     ref = None
 
+if args.dummy_mode:
+    logging.warning("Running in DUMMY mode")
+    from eigsep_corr.testing import DummyEigsepFpga as EigsepFpga
+
 fpga = EigsepFpga(
     SNAP_IP, fpg_file=FPG_FILE, program=args.program, ref=ref, logger=logger
 )
@@ -131,4 +138,4 @@ try:
 except KeyboardInterrupt:
     print("Exiting.")
 finally:
-    fpga.event.set()
+    fpga.end_observing()

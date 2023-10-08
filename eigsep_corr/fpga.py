@@ -394,12 +394,22 @@ class EigsepFpga:
         """
         while not self.event.is_set() or not self.queue.empty():
             d = self.queue.get()
+            if d is None:
+                logging.info("End of queue, processing finished.")
+                break
             data = d["data"]
             cnt = d["cnt"]
             if write_files:
                 self.file.add_data(data, cnt)
             if update_redis:
                 self.update_redis(data, cnt)
+
+    def end_observing(self):
+        try:
+            self.event.set()
+            self.queue.put(None)  # signals end of observing
+        except(AttributeError):
+            pass
 
     def observe(
         self,
