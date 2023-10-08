@@ -100,27 +100,38 @@ class EigsepFpga:
 
         self.redis = redis.Redis(REDIS_HOST, port=REDIS_PORT)
 
-        # io.File object for saving data (gets instantiated in write_file)
-        self.savefile = None
+
+    @property
+    def version(self):
+        val = self.fpga.read_uint("version_version")
+        major = val >> 16
+        minor = val & 0xffff
+        return (major, minor)
 
     @property
     def metadata(self):
-        m = {
+        # XXX fix this
+        try:
+            sample_rate = self.adc.sample_rate
+            gain = self.adc.gain
+        except AttributeError:  # these aren't set if ADC not initialized
+            sample_rate = 0
+            gain = 0
+        return {
             "nchan": NCHAN,
             "fpg_file": self.fpg_file,
-            "fpg_version": self.fpga.read_int("version_version"),
-            "sample_rate": self.adc.sample_rate,
-            "gain": self.adc.gain,
+            "fpg_version": self.version,
+            "sample_rate": sample_rate,
+            "gain": gain,
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
             "pol01_delay": self.fpga.read_uint("pfb_pol0_delay"),
             "pam_atten": {
                 int(i): p.get_attenuation() for i, p in enumerate(self.pams)
             },
-            "fft_shift": self.pfb.fft_shift,
+            "fft_shift": self.pfb.get_fft_shift(),
             "sync_time": self.sync_time,
         }
-        return m
 
     def _run_adc_test(self, test, n_tries):
         """
@@ -170,6 +181,7 @@ class EigsepFpga:
         """
         self.logger.info("Initializing ADCs")
         self.adc.init(sample_rate=sample_rate)
+        self.adc.sample_rate = sample_rate
 
         self._run_adc_test(self.adc.alignLineClock, n_tries=n_tries)
         self._run_adc_test(self.adc.alignFrameClock, n_tries=n_tries)
@@ -178,6 +190,7 @@ class EigsepFpga:
         self.adc.selectADC()
         self.adc.adc.selectInput([1, 1, 3, 3])  # XXX allow as input arg?
         self.adc.set_gain(gain)
+        self.adc.gain = gain
 
     def initialize_fpga(
         self,
@@ -203,7 +216,7 @@ class EigsepFpga:
         for blk in self.blocks:
             blk.initialize()
         # initialize pams
-        self.initialize_pams(pam_atten=pam_atten)
+        self.initialize_pams(attenuation=pam_atten)
         # initialize fems
         self.initialize_fems(N=n_fems)
         self.logger.info(f"Setting FFT_SHIFT: {fft_shift}")
@@ -215,7 +228,7 @@ class EigsepFpga:
         if verify:
             assert self.fpga.read_uint("corr_acc_len") == corr_acc_len
             assert self.fpga.read_uint("corr_scalar") == corr_scalar
-        self.set_pol0_delay(delay=pol0_delay, verify=verify)
+        self.set_pol01_delay(delay=pol0_delay, verify=verify)
 
     def set_pol01_delay(self, delay, verify=False):
         """

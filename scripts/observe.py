@@ -2,11 +2,11 @@ import argparse
 import logging
 from eigsep_corr.fpga import EigsepFpga
 
-SNAP_IP = "10.10.10.13"
-# SNAP_IP = "10.10.10.236"
+# SNAP_IP = "10.10.10.13"
+SNAP_IP = "10.10.10.236"
 fpg_filename = "eigsep_fengine_1g_v2_2_2023-10-06_1806.fpg"
 FPG_FILE = "/home/eigsep/eigsep/eigsep_corr/" + fpg_filename
-FPG_VERSION = 0x20002
+FPG_VERSION = (2, 2)  # major, minor
 SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
@@ -17,7 +17,7 @@ USE_REF = False  # use reference input
 USE_NOISE = False  # use digital noise instead of ADC data
 PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}
 N_FEMS = 0  # number of FEMs to initialize (0-3)
-SAVE_DIR = "/media/eigsep/data"
+SAVE_DIR = "/media/eigsep/T7/data"
 LOG_LEVEL = logging.DEBUG
 
 parser = argparse.ArgumentParser(
@@ -82,7 +82,7 @@ fpga = EigsepFpga(
 
 
 if args.initialize_adc:
-    fpga.initialize_adc(adc_sample_rate=SAMPLE_RATE, adc_gain=GAIN)
+    fpga.initialize_adc(sample_rate=SAMPLE_RATE, gain=GAIN)
 
 if args.initialize_fpga:
     fpga.initialize_fpga(
@@ -95,7 +95,7 @@ if args.initialize_fpga:
     )
 
 # check version
-assert fpga.fpga.read_int("version_version") == FPG_VERSION
+assert fpga.version == FPG_VERSION
 
 # set input
 fpga.noise.set_seed(stream=None, seed=0)
