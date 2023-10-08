@@ -28,7 +28,7 @@ from .blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
 SNAP_IP = "10.10.10.236"
 SAMPLE_RATE = 500  # MHz
 FPG_FILE = (
-    "/home/eigsep/eigsep_corr/eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg"
+    "/home/eigsep/eigsep_corr/eigsep_fengine_1g_v2_1_2023-10-05_1148.fpg"
 )
 ADC_GAIN = 4
 FFT_SHIFT = 0x0055  #
