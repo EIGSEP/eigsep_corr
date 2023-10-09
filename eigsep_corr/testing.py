@@ -49,7 +49,7 @@ class DummyFpga(DummyBlock):
     read_uint = read_int
 
     def read(self, reg, nbytes):
-        return "\x12" * nbytes
+        return b"\x12" * nbytes
 
 
 class DummyEigsepFpga(EigsepFpga):

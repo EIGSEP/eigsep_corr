@@ -478,7 +478,9 @@ class EigsepFpga:
             if update_redis:
                 self.update_redis(data, cnt)
             if write_files:
-                self.file.add_data(data, cnt)
+                filename = self.file.add_data(data, cnt)
+                if filename is not None:
+                    self.logger.info(f"Wrote file {filename}")
         if self.file is not None and len(self.file) > 0:
             self.logger.info("Writing short final file.")
             self.file.write()

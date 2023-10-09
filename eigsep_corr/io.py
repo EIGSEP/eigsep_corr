@@ -174,7 +174,10 @@ def read_file(filename, header=None, nspec=-1, skip=0):
 def write_file(filename, header, data):
     with open(filename, 'wb') as fh:
         _write_raw_header(fh, header)
-        fh.write(pack_data(data, header))
+        if type(data) is bytes:
+            fh.write(data)
+        else:
+            fh.write(pack_data(data, header))
 
 
 class File:
@@ -200,14 +203,17 @@ class File:
         self.buffer[acc_cnt] = data
         self.header["acc_cnt"].append(acc_cnt)
         if len(self) == self.ntimes:
-            self.write()
+            return self.write()
+        else:
+            return None
 
     # XXX maybe call this corr_write
     def write(self, fname=None):
         if fname is None:
             date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            fname = os.path.join(self.save_dir, f"{date}.json")
+            fname = os.path.join(self.save_dir, f"{date}.eig")
         buffer = [self.buffer[acc_cnt] for acc_cnt in self.header['acc_cnt']]
         packed_data = pack_corr_data(buffer, self.header)
         write_file(fname, self.header, packed_data)
         self.reset()
+        return fname
