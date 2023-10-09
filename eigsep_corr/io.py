@@ -118,8 +118,9 @@ def pack_raw_data(data, dtype=('int32', '>')):
 
 
 def unpack_data(fh_buf, h, nspec=-1, skip=0):
-    dt = build_dtype(*h['dtype'])
-    pair_offs = calc_pair_offsets(h['pairs'], h['acc_bins'], h['nchan'], h['dtype'])
+    pair_offs = calc_pair_offsets(
+        h['pairs'], h['acc_bins'], h['nchan'], h['dtype']
+    )
     integration_len = pair_offs[-1]
     if type(fh_buf) is bytes:
         buf = fh_buf
@@ -132,25 +133,25 @@ def unpack_data(fh_buf, h, nspec=-1, skip=0):
         else:
             buf = fh.read(nspec * integration_len)
     data = {
-            p: [
-                buf[b+pair_offs[i]:b+pair_offs[i+1]]
-                for b in range(0, len(buf), integration_len)
-               ] for i, p in enumerate(h['pairs'])
-           }
+        p: [
+            buf[b+pair_offs[i]:b+pair_offs[i+1]]
+            for b in range(0, len(buf), integration_len)
+        ] for i, p in enumerate(h['pairs'])
+    }
     data = {
-            p: unpack_raw_data(v, p, h['acc_bins'], h['nchan'], h['dtype'])
-            for p, v in data.items()
-           }
+        p: unpack_raw_data(v, p, h['acc_bins'], h['nchan'], h['dtype'])
+        for p, v in data.items()
+    }
     return data
 
 
 def pack_data(data, h):
     ntimes = list(data.values())[0].shape[0]
     buf = [
-            pack_raw_data(data[p][i], dtype=h['dtype'])
-            for i in range(ntimes)
-            for p in h['pairs']
-          ]
+        pack_raw_data(data[p][i], dtype=h['dtype'])
+        for i in range(ntimes)
+        for p in h['pairs']
+    ]
     buf = b''.join(buf)
     return buf
 
