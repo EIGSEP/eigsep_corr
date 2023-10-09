@@ -26,15 +26,19 @@ class TestFileIO:
 
     def test_pack_unpack_raw_data(self):
         dt = io.build_dtype("int32", ">")
-        d1 = np.ones((10, 18, 2, 1024), dtype=dt)
+        d1 = np.ones((10, 2, 1024, 1), dtype=dt)
         buf = io.pack_raw_data(d1)
-        d2 = io.unpack_raw_data(buf)
+        d2 = io.unpack_raw_data(buf, '0')
+        np.testing.assert_allclose(d1, d2)
+        d1 = np.ones((10, 2, 1024, 2), dtype=dt)
+        buf = io.pack_raw_data(d1)
+        d2 = io.unpack_raw_data(buf, '02')
         np.testing.assert_allclose(d1, d2)
 
     def test_pack_unpack_data(self):
         h = copy.deepcopy(io.DEFAULT_HEADER)
         pairs = h["pairs"]
-        d1 = {p: np.ones((10, 2, 1024)) for p in pairs}
+        d1 = {p: np.ones((10, 2, 1024, 1)) if len(p) == 1 else np.ones((10, 2, 1024, 2)) for p in pairs}
         buf = io.pack_data(d1, h)
         d2 = io.unpack_data(buf, h)
         for k, v in d1.items():
@@ -44,7 +48,7 @@ class TestFileIO:
         filename = tmp_path / "test.eig"
         h1 = copy.deepcopy(io.DEFAULT_HEADER)
         pairs = h1["pairs"]
-        d1 = {p: np.ones((len(h1["acc_cnt"]), 2, 1024)) for p in pairs}
+        d1 = {p: np.ones((len(h1["acc_cnt"]), 2, 1024, 1)) if len(p) == 1 else np.ones((len(h1["acc_cnt"]), 2, 1024, 2)) for p in pairs}
         io.write_file(filename, h1, d1)
         h2, d2 = io.read_file(filename)
         for k, v in d1.items():
