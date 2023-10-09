@@ -214,7 +214,7 @@ class File:
         self.buffer[acc_cnt] = data
         self.header["acc_cnt"].append(acc_cnt)
         if len(self) == self.ntimes:
-            return self.write()
+            return self.corr_write()
         else:
             return None
 
@@ -222,8 +222,8 @@ class File:
         if fname is None:
             date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             fname = os.path.join(self.save_dir, f"{date}.eig")
-        buffer = [self.buffer[acc_cnt] for acc_cnt in self.header['acc_cnt']]
-        packed_data = pack_corr_data(buffer, self.header)
+        buf = [self.buffer[acc_cnt] for acc_cnt in self.header['acc_cnt']]
+        packed_data = pack_corr_data(buf, self.header)
         write_file(fname, self.header, packed_data)
         self.reset()
         return fname
