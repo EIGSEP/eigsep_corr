@@ -2,7 +2,6 @@ import time
 import datetime
 import logging
 import redis
-import numpy as np
 from math import floor
 
 from .fpga import EigsepFpga
@@ -17,13 +16,16 @@ class DummyBlock(object):
         for attr in attrs:
             self.fpga.regs[attr] = None
         self._attributes = {}
+
     def init(self, *args, **kwargs):
         pass
+
     def __getattribute__(self, attr):
         try:
             return object.__getattribute__(self, attr)
         except(AttributeError):
             return self
+
     def __call__(self, *args, **kwargs):
         return None
 
@@ -114,4 +116,3 @@ class DummyEigsepFpga(EigsepFpga):
                 datetime.datetime.fromtimestamp(self.sync_time).isoformat(),
             )
         self.is_synchronized = True
-
