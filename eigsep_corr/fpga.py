@@ -20,10 +20,11 @@ import time
 from threading import Event, Thread
 from queue import Queue
 import numpy as np
+
 try:
     import casperfpga
     from casperfpga.transport_tapcp import TapcpTransport
-except(ImportError):
+except ImportError:
     logging.warning("Running without casperfpga installed")
     TapcpTransport = None
 
@@ -33,8 +34,8 @@ from .data import DATA_PATH
 
 SNAP_IP = "10.10.10.236"
 SAMPLE_RATE = 500  # MHz
-FPG_FILE = (
-    os.path.join(DATA_PATH, "eigsep_fengine_1g_v2_2_2023-10-06_1806.fpg")
+FPG_FILE = os.path.join(
+    DATA_PATH, "eigsep_fengine_1g_v2_2_2023-10-06_1806.fpg"
 )
 FPG_VERSION = (2, 2)  # major, minor
 ADC_GAIN = 4
@@ -129,7 +130,7 @@ class EigsepFpga:
         m = {
             "nchan": NCHAN,
             "fpg_file": self.fpg_file,
-            "fpg_version": self.fpga.read_uint("version_version"),
+            "fpg_version": self.version,
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
             "pol01_delay": self.fpga.read_uint("pfb_pol0_delay"),
@@ -420,7 +421,7 @@ class EigsepFpga:
         try:
             self.event.set()
             self.queue.put(None)  # signals end of observing
-        except(AttributeError):
+        except AttributeError:
             pass
 
     def observe(
