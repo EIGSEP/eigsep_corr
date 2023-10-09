@@ -40,7 +40,9 @@ class DummyFpga(DummyBlock):
 
     def read_int(self, reg):
         if reg == 'corr_acc_cnt':
-            return int(floor((time.time() - self.sync_time) / self.cnt_period))
+            acc_cnt = (time.time() - self.sync_time) / self.cnt_period
+            acc_cnt = int(floor(acc_cnt))
+            return acc_cnt
         else:
             return self.regs[reg]
 
@@ -66,7 +68,6 @@ class DummyEigsepFpga(EigsepFpga):
     ):
         if logger is None:
             logger = logging.getLogger(__name__)
-            logger.setLevel(logging.DEBUG)
         self.logger = logger
 
         self.fpg_file = fpg_file
@@ -91,6 +92,8 @@ class DummyEigsepFpga(EigsepFpga):
         self.sample_rate = sample_rate
         self.nchan = nchan
         self.acc_len = acc_len
+
+        self.file = None
 
     def initialize_adc(self, *args, **kwargs):
         self.adc_initialized = True

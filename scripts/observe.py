@@ -1,20 +1,17 @@
 import argparse
 import logging
 
-from eigsep_corr.fpga import EigsepFpga
+from eigsep_corr.fpga import EigsepFpga, FPG_FILE
 
 # SNAP_IP = "10.10.10.13"
 SNAP_IP = "10.10.10.236"
-fpg_filename = "eigsep_fengine_1g_v2_2_2023-10-06_1806.fpg"
-FPG_FILE = "/home/eigsep/eigsep/eigsep_corr/" + fpg_filename
-FPG_VERSION = (2, 2)  # major, minor
 SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
 CORR_SCALAR = 2**9
 POL0_DELAY = 0
 FFT_SHIFT = 0x0055
-USE_REF = False  # use reference input
+USE_REF = False  # use synth to generate adc clock from 10 MHz
 USE_NOISE = False  # use digital noise instead of ADC data
 PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}
 N_FEMS = 0  # number of FEMs to initialize (0-3)
@@ -38,6 +35,12 @@ parser.add_argument(
     action="store_true",
     default=False,
     help="program eigsep correlator",
+)
+parser.add_argument(
+    "--fpg",
+    dest="fpg_file",
+    default=FPG_FILE,
+    help="FPG file for eigsep correlator",
 )
 parser.add_argument(
     "-a",
@@ -74,10 +77,24 @@ parser.add_argument(
     default=False,
     help="write data to file",
 )
+parser.add_argument(
+    "--ntimes",
+    dest="ntimes",
+    type=int,
+    default=60,
+    help="Number of integrations to write per file.",
+)
+parser.add_argument(
+    "--save_dir",
+    dest="save_dir",
+    default=SAVE_DIR,
+    help="Directory to save files.",
+)
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="snap.log", level=LOG_LEVEL)
+logger.setLevel(LOG_LEVEL)
+#logging.basicConfig(filename="snap.log", level=LOG_LEVEL)
 
 if USE_REF:
     ref = 10
@@ -85,11 +102,15 @@ else:
     ref = None
 
 if args.dummy_mode:
-    logging.warning("Running in DUMMY mode")
+    logger.warning("Running in DUMMY mode")
     from eigsep_corr.testing import DummyEigsepFpga as EigsepFpga
 
 fpga = EigsepFpga(
-    SNAP_IP, fpg_file=FPG_FILE, program=args.program, ref=ref, logger=logger
+    SNAP_IP,
+    fpg_file=args.fpg_file,
+    program=args.program,
+    ref=ref,
+    logger=logger
 )
 
 
@@ -106,8 +127,7 @@ if args.initialize_fpga:
         n_fems=N_FEMS,
     )
 
-# check version
-assert fpga.version == FPG_VERSION
+fpga.check_version()
 
 # set input
 fpga.noise.set_seed(stream=None, seed=0)
@@ -126,16 +146,17 @@ else:
 if args.sync:
     fpga.synchronize(delay=0, update_redis=args.update_redis)
 
-print("Observing ...")
+logger.info("Observing ...")
 try:
     fpga.observe(
-        SAVE_DIR,
+        args.save_dir,
         pairs=None,
         timeout=10,
         update_redis=args.update_redis,
         write_files=args.write_files,
+        ntimes=args.ntimes,
     )
 except KeyboardInterrupt:
-    print("Exiting.")
+    logger.info("Exiting.")
 finally:
     fpga.end_observing()

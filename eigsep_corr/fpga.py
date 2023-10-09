@@ -15,8 +15,9 @@ import datetime
 import logging
 import redis
 import struct
-from threading import Event, Thread
+import os
 import time
+from threading import Event, Thread
 from queue import Queue
 import numpy as np
 try:
@@ -28,12 +29,14 @@ except(ImportError):
 
 from . import io
 from .blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
+from .data import DATA_PATH
 
 SNAP_IP = "10.10.10.236"
 SAMPLE_RATE = 500  # MHz
 FPG_FILE = (
-    "/home/eigsep/eigsep_corr/eigsep_fengine_1g_v2_1_2023-10-05_1148.fpg"
+    os.path.join(DATA_PATH, "eigsep_fengine_1g_v2_2_2023-10-06_1806.fpg")
 )
+FPG_VERSION = (2, 2)  # major, minor
 ADC_GAIN = 4
 FFT_SHIFT = 0x0055  #
 CORR_ACC_LEN = 2**28  # makes corr_acc_cnt increment by ~1 per second
@@ -107,12 +110,19 @@ class EigsepFpga:
         self.pams_initialized = False
         self.is_synchronized = False
 
+        self.file = None
+        self.queue = None
+        self.event = None
+
     @property
     def version(self):
         val = self.fpga.read_uint("version_version")
         major = val >> 16
         minor = val & 0xFFFF
         return (major, minor)
+
+    def check_version(self):
+        assert self.version == FPG_VERSION
 
     @property
     def metadata(self):
@@ -380,29 +390,29 @@ class EigsepFpga:
         self.redis.set("updated_unix", int(time.time()))
         self.redis.set("updated_date", datetime.datetime.now().isoformat())
 
-    def record_data(self, write_files=True, update_redis=True):
-        """
-        Pop data from the queue and write to files and/or redis.
+    def _read_integrations(self, pairs, timeout=10):
+        cnt = self.fpga.read_int("corr_acc_cnt")
+        t = time.time()
 
-        Parameters
-        ----------
-        write_files : bool
-            Whether to write data to files.
-        update_redis : bool
-            Whether to update redis.
-
-        """
-        while not self.event.is_set() or not self.queue.empty():
-            d = self.queue.get()
-            if d is None:
-                logging.info("End of queue, processing finished.")
-                break
-            data = d["data"]
-            cnt = d["cnt"]
-            if write_files:
-                self.file.add_data(data, cnt)
-            if update_redis:
-                self.update_redis(data, cnt)
+        while time.time() < t + timeout and not self.event.is_set():
+            new_cnt = self.fpga.read_int("corr_acc_cnt")
+            if new_cnt == cnt:
+                time.sleep(0.01)
+                continue
+            if new_cnt > cnt + 1:
+                self.logger.warning(
+                    f"Missed {new_cnt - cnt - 1} integration(s)."
+                )
+            cnt = new_cnt
+            self.logger.info(f"Reading acc_cnt={cnt}")
+            data = self.read_data(pairs=pairs, unpack=False)
+            if cnt != self.fpga.read_int("corr_acc_cnt"):
+                self.logger.error(
+                    f"Read of acc_cnt={cnt} FAILED to complete before "
+                    "next integration."
+                )
+            self.queue.put({"data": data, "cnt": cnt})
+            t = time.time()
 
     def end_observing(self):
         try:
@@ -443,38 +453,35 @@ class EigsepFpga:
             Header to write to each file. Default is io.DEFAULT_HEADER.
 
         """
+        self.queue = Queue(maxsize=0)  # XXX infinite size
+        self.event = Event()
+
+        thd = Thread(target=self._read_integrations, args=(pairs, timeout))
+        thd.start()
+
         if write_files:
             # update header
             for k, v in self.metadata.items():
                 header[k] = v
             self.file = io.File(save_dir, ntimes=ntimes, header=header)
-        self.queue = Queue(maxsize=0)  # XXX infinite size
-        self.event = Event()
-        rec = Thread(target=self.record_data, args=(write_files, update_redis))
-        rec.start()
 
-        cnt = self.fpga.read_int("corr_acc_cnt")
-        t = time.time()
+        while not self.event.is_set() or not self.queue.empty():
+            d = self.queue.get()
+            if d is None:
+                if self.event.is_set():
+                    self.logger.info("End of queue, processing finished.")
+                    break
+                else:
+                    continue
+            data = d["data"]
+            cnt = d["cnt"]
+            if update_redis:
+                self.update_redis(data, cnt)
+            if write_files:
+                self.file.add_data(data, cnt)
+        if self.file is not None and len(self.file) > 0:
+            self.logger.info("Writing short final file.")
+            self.file.write()
 
-        while time.time() < t + timeout and not self.event.is_set():
-            new_cnt = self.fpga.read_int("corr_acc_cnt")
-            if new_cnt == cnt:
-                time.sleep(0.01)
-                continue
-            if new_cnt > cnt + 1:
-                self.logger.warning(
-                    f"Missed {new_cnt - cnt - 1} integration(s)."
-                )
-            cnt = new_cnt
-            self.logger.info(f"Reading acc_cnt={cnt}")
-            data = self.read_data(pairs=pairs, unpack=False)
-            if cnt != self.fpga.read_int("corr_acc_cnt"):
-                self.logger.error(
-                    f"Read of acc_cnt={cnt} FAILED to complete before "
-                    "next integration."
-                )
-            self.queue.put({"data": data, "cnt": cnt})
-            t = time.time()
-
-        rec.join()
+        thd.join()
         self.logger.info("Done observing.")

@@ -179,6 +179,9 @@ class File:
         self.header = header
         self.header["acc_cnt"] = []
 
+    def __len__(self):
+        return len(self.buffer)
+
     def reset(self):
         """
         Clear buffer and reset header.
@@ -189,12 +192,14 @@ class File:
     def add_data(self, data, acc_cnt):
         self.buffer[acc_cnt] = data
         self.header["acc_cnt"].append(acc_cnt)
-        if len(self.buffer) == self.ntimes:
+        if len(self) == self.ntimes:
             self.write()
-            self.reset()
 
-    def write(self):
-        date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        fname = os.path.join(self.save_dir, f"{date}.json")
-        packed_data = pack_corr_data(self.buffer, self.header)
+    def write(self, fname=None):
+        if fname is None:
+            date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            fname = os.path.join(self.save_dir, f"{date}.json")
+        buffer = [self.buffer[acc_cnt] for acc_cnt in self.header['acc_cnt']]
+        packed_data = pack_corr_data(buffer, self.header)
         write_file(fname, self.header, packed_data)
+        self.reset()
