@@ -231,10 +231,14 @@ class EigsepFpga:
         """
         for blk in self.blocks:
             blk.initialize()
-        # initialize pams
-        self.initialize_pams(attenuation=pam_atten)
-        # initialize fems
-        self.initialize_fems(N=n_fems)
+        try:
+            # initialize pams
+            self.initialize_pams(attenuation=pam_atten)
+            # initialize fems
+            self.initialize_fems(N=n_fems)
+        except OSError:
+            self.logger.warn("Couldn't initialize PAMs and FEMs")
+            pass
         self.logger.info(f"Setting FFT_SHIFT: {fft_shift}")
         self.pfb.set_fft_shift(fft_shift)
         self.logger.info(f"Setting CORR_ACC_LEN: {corr_acc_len}")
