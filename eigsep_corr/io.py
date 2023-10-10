@@ -44,7 +44,7 @@ def unpack_raw_header(buf, header_size=None):
     header['header_size'] = header_size
     header['data_start'] = data_start
     header['pam_atten'] = {int(k): v for k, v in header['pam_atten'].items()}
-    header['acc_cnt'] = np.frombuffer(header['acc_cnt'].encode('utf-8'), dtype=dt)
+    header['acc_cnt'] = np.array(header['acc_cnt'], dtype=dt)
     return header
 
 
@@ -52,7 +52,7 @@ def pack_raw_header(header):
     dt = build_dtype(*header['dtype'])
     # filter to official header keys
     header = {k: v for k, v in header.items() if k in DEFAULT_HEADER}
-    header['acc_cnt'] = np.array(header['acc_cnt'], dtype=dt).tobytes().decode('utf-8')
+    header['acc_cnt'] = np.array(header['acc_cnt'], dtype=dt).tolist()
     buf = json.dumps(header)
     return buf
 
