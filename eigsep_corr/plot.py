@@ -69,7 +69,7 @@ def plot_live(
             (line,) = axs[1].plot(x, np.zeros(NCHAN), **line_kwargs)
             phase_lines[p] = line
             if plot_delay:
-                tau = np.fft.rfftfreq(NCHAN, d=x[1]-x[0])
+                tau = np.fft.rfftfreq(NCHAN, d=x[1] - x[0])
                 tau *= 1e3  # convert to ns
                 (line,) = axs[2].plot(tau, np.ones_like(tau), **line_kwargs)
                 dly_lines[p] = line
@@ -84,7 +84,7 @@ def plot_live(
                 dt = np.dtype(np.int32).newbyteorder(">")
                 data = np.frombuffer(redis.get(f"data:{p}"), dtype=dt)
                 cnt = redis.get("ACC_CNT")
-                #print(cnt)
+                print(cnt)
                 if len(p) == 1:  # auto
                     mag_lines[p].set_ydata(data)
                     ymax_mag = np.maximum(ymax_mag, data.max())
@@ -105,9 +105,6 @@ def plot_live(
                         alias_peak = np.argmax(dly)
                         actual_peak = 2 * len(tau) - alias_peak
                         print(f"Delay in sample clocks: {actual_peak}")
-                        actual_delay = 2 * tau.max() - tau[alias_peak]
-                        c = 500 / (actual_delay * 1e-9)
-                        print(f"v = {c/299792458:.3f}c")
 
             fig.canvas.draw()
             fig.canvas.flush_events()
