@@ -5,4 +5,5 @@ build/
 snap_fengines/eigsep_fengine_1g_v*/
 snap_fengines/golden_1g_v1_0/
 notebooks/.ipynb_checkpoints/
-*.npz
+eigsep_corr/data/*.npz
+eigsep_corr/data/*.eig
