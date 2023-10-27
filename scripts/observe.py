@@ -3,8 +3,8 @@ import logging
 
 from eigsep_corr.fpga import EigsepFpga, FPG_FILE
 
-# SNAP_IP = "10.10.10.13"
-SNAP_IP = "10.10.10.236"
+SNAP_IP = "10.10.10.13"
+# SNAP_IP = "10.10.10.236"
 SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
