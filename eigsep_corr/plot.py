@@ -85,10 +85,10 @@ def plot_live(
                 data = np.frombuffer(redis.get(f"data:{p}"), dtype=dt)
                 cnt = redis.get("ACC_CNT")
                 print(cnt)
+                ymax_mag = np.maximum(ymax_mag, data.max())
+                axs[0].set_ylim(1e3, ymax_mag)
                 if len(p) == 1:  # auto
                     mag_lines[p].set_ydata(data)
-                    ymax_mag = np.maximum(ymax_mag, data.max())
-                    axs[0].set_ylim(1e5, ymax_mag)
                 else:  # cross
                     real = data[::2].astype(np.int64)
                     imag = data[1::2].astype(np.int64)
