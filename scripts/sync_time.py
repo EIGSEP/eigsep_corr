@@ -1,7 +1,6 @@
 import paramiko
 import time
 import argparse
-from datetime import datetime
 
 # SSH credentials
 username = 'eigsep'
@@ -22,8 +21,10 @@ def sync_time(host):
         command = (
             'python3 -c "import time; from datetime import datetime; '
             'now = time.time(); '
-            'print(f\'Epoch time: {now}\'); '
-            'print(f\'Human-readable time: {datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M:%S")}\')"'
+            'epoch_time = now; '
+            'human_time = datetime.fromtimestamp(now).strftime(\'%Y-%m-%d %H:%M:%S\'); '
+            'print(\'Epoch time:\', epoch_time); '
+            'print(\'Human-readable time:\', human_time)"'
         )
         stdin, stdout, stderr = ssh.exec_command(command)
         stdout_str = stdout.read().decode().strip()
