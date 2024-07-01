@@ -4,7 +4,7 @@ import argparse
 
 # SSH credentials
 username = 'eigsep'
-password = 'your_password'  # Replace with your actual password
+password = 'universe'  # Replace with your actual password
 
 def sync_time(host):
     current_time = time.strftime('%Y-%m-%d %H:%M:%S')
