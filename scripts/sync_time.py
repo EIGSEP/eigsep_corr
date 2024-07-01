@@ -18,9 +18,13 @@ def sync_time(host):
         ssh.exec_command(f'sudo date -s "{current_time}"')
         print(f'Time synced with {host}')
         # Run a command to check the time on the Pi
-        stdin, stdout, stderr = ssh.exec_command('python3 -c "import time; from datetime import datetime; now = time.time(); print(now, datetime.fromtimestamp(now).strftime(\'%Y-%m-%d %H:%M:%S\'))"')
+        stdin, stdout, stderr = ssh.exec_command(
+            'python3 -c "import time; from datetime import datetime; now = time.time(); '
+            'print(f\'Epoch time: {now}\'); '
+            'print(f\'Human-readable time: {datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M:%S")}\')"'
+        )
         synced_time_output = stdout.read().decode().strip()
-        print(f"Current time on {host}: {synced_time_output}")
+        print(f"Current time on {host}:\n{synced_time_output}")
         ssh.close()
     except Exception as e:
         print(f'Failed to sync time with {host}: {e}')
