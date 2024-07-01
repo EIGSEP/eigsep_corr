@@ -19,12 +19,13 @@ def sync_time(host):
         print(f'Time synced with {host}')
         
         # Run a command to check the time on the Pi
-        stdin, stdout, stderr = ssh.exec_command(
+        command = (
             'python3 -c "import time; from datetime import datetime; '
             'now = time.time(); '
             'print(f\'Epoch time: {now}\'); '
             'print(f\'Human-readable time: {datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M:%S")}\')"'
         )
+        stdin, stdout, stderr = ssh.exec_command(command)
         stdout_str = stdout.read().decode().strip()
         stderr_str = stderr.read().decode().strip()
         
