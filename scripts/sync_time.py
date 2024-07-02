@@ -1,10 +1,28 @@
 import paramiko
 import time
 import argparse
+import nmap
 
 # SSH credentials
 username = 'eigsep'
-password = 'universe'
+password = 'universe'  # Replace with your actual password
+
+# List of Raspberry Pi hostnames (if needed for nmap scanning)
+raspberry_pi_hostnames = {
+    '10.10.10.10': 'pi1',
+    '10.10.10.11': 'pi2',
+    '10.10.10.12': 'pi3'
+}
+
+def scan_network_for_pi(pi_hostname):
+    nm = nmap.PortScanner()
+    nm.scan(hosts='10.10.10.0/24', arguments='-sn')
+    for host in nm.all_hosts():
+        if 'hostnames' in nm[host] and nm[host]['hostnames']:
+            for hostname in nm[host]['hostnames']:
+                if hostname['name'] == pi_hostname:
+                    return host
+    return None
 
 def sync_time(host):
     current_time = time.strftime('%Y-%m-%d %H:%M:%S')
@@ -38,6 +56,13 @@ def sync_time(host):
         ssh.close()
     except Exception as e:
         print(f'Failed to sync time with {host}: {e}')
+        if host in raspberry_pi_hostnames:
+            new_ip = scan_network_for_pi(raspberry_pi_hostnames[host])
+            if new_ip:
+                print(f'Found {host} under new IP: {new_ip}. Retrying...')
+                sync_time(new_ip)
+            else:
+                print(f'Could not find {host} on the network.')
 
 def main(pis_to_connect):
     for ip in pis_to_connect:
