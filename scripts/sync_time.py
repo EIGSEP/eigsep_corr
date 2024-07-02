@@ -6,6 +6,7 @@ import nmap
 # SSH credentials
 username = 'eigsep'
 password = 'universe'  # Replace with your actual password
+connection_timeout = 10  # Timeout for SSH connections in seconds
 
 # List of Raspberry Pi hostnames (if needed for nmap scanning)
 raspberry_pi_hostnames = {
@@ -30,7 +31,7 @@ def sync_time(host):
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
         print(f'Connecting to {host}...')
-        ssh.connect(host, username=username, password=password)
+        ssh.connect(host, username=username, password=password, timeout=connection_timeout)
         print(f'Connected to {host}')
         ssh.exec_command(f'sudo date -s "{current_time}"')
         print(f'Time synced with {host}')
