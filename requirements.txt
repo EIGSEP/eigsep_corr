@@ -33,6 +33,7 @@ ptyprocess==0.7.0
 pure-eval==0.2.2
 Pygments==2.13.0
 pyparsing==3.0.9
+python-nmap==0.7.1
 python-utils==3.3.3
 pyzmq==24.0.0
 redis==4.3.4
