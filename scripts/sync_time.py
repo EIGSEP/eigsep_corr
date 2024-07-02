@@ -50,10 +50,13 @@ def sync_time(host):
         print(f'Failed to sync time with {host}: {e}')
 
 def main(pis_to_connect):
-    while True:
-        for ip in pis_to_connect:
-            sync_time(ip)
-        time.sleep(sync_interval)
+    try:
+        while True:
+            for ip in pis_to_connect:
+                sync_time(ip)
+            time.sleep(sync_interval)
+    except KeyboardInterrupt:
+        print("\nSyncing script interrupted. Exiting gracefully...")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Sync time with specified Raspberry Pis')
