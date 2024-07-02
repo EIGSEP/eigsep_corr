@@ -48,6 +48,7 @@ def sync_time(host):
         ssh.close()
     except Exception as e:
         print(f'Failed to sync time with {host}: {e}')
+    print('\n')
 
 def main(pis_to_connect):
     try:
