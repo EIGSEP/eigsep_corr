@@ -58,6 +58,7 @@ def plot_live(
     axs[0].set_ylabel("Magnitude")
     axs[1].set_ylabel("Phase")
     axs[1].set_xlabel("Frequency (MHz)")
+    axs[0].set_ylim(1e1, 1e9)
     if plot_delay:
         axs[2].set_ylabel("Delay spectrum")
         axs[2].set_xlabel("Delay (ns)")
@@ -86,7 +87,7 @@ def plot_live(
                 cnt = redis.get("ACC_CNT")
                 print(cnt)
                 ymax_mag = np.maximum(ymax_mag, data.max())
-                axs[0].set_ylim(1e3, ymax_mag)
+                #axs[0].set_ylim(1e1, ymax_mag)
                 if len(p) == 1:  # auto
                     mag_lines[p].set_ydata(data)
                 else:  # cross
