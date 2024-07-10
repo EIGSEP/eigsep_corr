@@ -9,14 +9,15 @@ SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
 CORR_SCALAR = 2**9
-POL0_DELAY = 623
-FFT_SHIFT = 0x00FF
+POL0_DELAY = 623 #XXX
+#FFT_SHIFT = 0x00FF 
+FFT_SHIFT = 0x03FF
 USE_REF = False  # use synth to generate adc clock from 10 MHz
 USE_NOISE = False  # use digital noise instead of ADC data
-PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}
+PAM_ATTEN = {"0": (15, 15), "1": (15, 15), "2": (15, 15)}
 N_FEMS = 0  # number of FEMs to initialize (0-3)
 SAVE_DIR = "/media/eigsep/T7/data"
-LOG_LEVEL = logging.DEBUG
+LOG_LEVEL = logging.INFO
 
 parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
@@ -93,8 +94,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
-logger.setLevel(LOG_LEVEL)
-#logging.basicConfig(filename="snap.log", level=LOG_LEVEL)
+logging.basicConfig(level=LOG_LEVEL)
 
 if USE_REF:
     ref = 10
