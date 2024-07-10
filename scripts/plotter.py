@@ -5,5 +5,5 @@ REDIS_HOST = "10.10.10.10"
 REDIS_PORT = 6379
 
 r = redis.Redis(REDIS_HOST, port=REDIS_PORT)
-#pairs = ["0", "1", "2", "3", "02", "13"]
-plot_live(r, plot_delay=True)
+pairs = ["2", "3"]
+plot_live(r, pairs=pairs, plot_delay=False)
