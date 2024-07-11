@@ -9,12 +9,11 @@ SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
 CORR_SCALAR = 2**9
-POL0_DELAY = 623 #XXX
-#FFT_SHIFT = 0x00FF 
-FFT_SHIFT = 0x03FF
+POL_DELAY = {"01": 0, "23": 0, "45": 0}
+FFT_SHIFT = 0x00FF 
 USE_REF = False  # use synth to generate adc clock from 10 MHz
 USE_NOISE = False  # use digital noise instead of ADC data
-PAM_ATTEN = {"0": (15, 15), "1": (15, 15), "2": (15, 15)}
+PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}
 N_FEMS = 0  # number of FEMs to initialize (0-3)
 SAVE_DIR = "/media/eigsep/T7/data"
 LOG_LEVEL = logging.INFO
@@ -122,7 +121,7 @@ if args.initialize_fpga:
         fft_shift=FFT_SHIFT,
         corr_acc_len=CORR_ACC_LEN,
         corr_scalar=CORR_SCALAR,
-        pol0_delay=POL0_DELAY,
+        pol_delay=POL_DELAY,
         pam_atten=PAM_ATTEN,
         n_fems=N_FEMS,
     )
