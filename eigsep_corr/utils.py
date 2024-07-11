@@ -19,7 +19,7 @@ def calc_inttime(sample_rate_Hz, acc_len):
 
 def calc_times(acc_cnt, inttime, sync_time):
     """Calculate integration times [s] from acc_cnt using sync time."""
-    times = acc_cnt * inttime + sync_time
+    times = acc_cnt * inttime + sync_time  # XXX acc_cnt + 1?
     return times
 
 
