@@ -12,6 +12,7 @@ def plot_live(
     x=np.linspace(0, SAMPLE_RATE / 2, num=NCHAN, endpoint=False),
     plot_delay=False,
     sleep=0.1,
+    log_scale=True,
 ):
     """
     Live plotting of correlation output from FPGA
@@ -54,17 +55,25 @@ def plot_live(
         nrows = 2
     plt.ion()
     fig, axs = plt.subplots(figsize=(10, 10), nrows=nrows)
+    axs[0].grid()
+    axs[1].grid()
     axs[0].sharex(axs[1])
     axs[0].set_ylabel("Magnitude")
     axs[1].set_ylabel("Phase")
     axs[1].set_xlabel("Frequency (MHz)")
-    axs[0].set_ylim(1e1, 1e9)
+    if log_scale:
+        axs[0].set_ylim(1e1, 1e9)
+    else:
+        axs[0].set_ylim(0, 1e6)
     if plot_delay:
         axs[2].set_ylabel("Delay spectrum")
         axs[2].set_xlabel("Delay (ns)")
     for p in pairs:
         line_kwargs = {"color": colors[p], "label": p}
-        (line,) = axs[0].semilogy(x, np.ones(NCHAN), **line_kwargs)
+        if log_scale:
+            (line,) = axs[0].semilogy(x, np.ones(NCHAN), **line_kwargs)
+        else:
+            (line,) = axs[0].plot(x, np.ones(NCHAN), **line_kwargs)
         mag_lines[p] = line
         if len(p) == 2:
             (line,) = axs[1].plot(x, np.zeros(NCHAN), **line_kwargs)
