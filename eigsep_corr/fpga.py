@@ -35,16 +35,16 @@ from .data import DATA_PATH
 SNAP_IP = "10.10.10.236"
 SAMPLE_RATE = 500  # MHz
 FPG_FILE = os.path.join(
-    DATA_PATH, "eigsep_fengine_1g_v2_2_2023-10-06_1806.fpg"
+    DATA_PATH, "eigsep_fengine_1g_v2_3_2024-07-08_1858.fpg"
 )
-FPG_VERSION = (2, 2)  # major, minor
+FPG_VERSION = (2, 3)  # major, minor
 ADC_GAIN = 4
 FFT_SHIFT = 0x0055
 CORR_ACC_LEN = 2**28  # makes corr_acc_cnt increment by ~1 per second
 CORR_SCALAR = 2**9  # correlator uses 8 bits after binary point so 2**9 = 1
 CORR_WORD = 4  # bytes
 DEFAULT_PAM_ATTEN = {0: (8, 8), 1: (8, 8), 2: (8, 8)}
-DEFAULT_POL0_DELAY = 0
+DEFAULT_POL_DELAY = {"01": 0, "23": 0, "45": 0}
 N_FEMS = 0  # set to 0 since they're not initialized from SNAP
 NCHAN = 1024
 REDIS_HOST = "localhost"
@@ -133,7 +133,9 @@ class EigsepFpga:
             "fpg_version": self.version,
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
-            "pol01_delay": self.fpga.read_uint("pfb_pol0_delay"),
+            "pol01_delay": self.fpga.read_uint("pfb_pol01_delay"),
+            "pol23_delay": self.fpga.read_uint("pfb_pol23_delay"),
+            "pol45_delay": self.fpga.read_uint("pfb_pol45_delay"),
             "fft_shift": self.pfb.get_fft_shift(),
         }
         if self.adc_initialized:
@@ -213,7 +215,7 @@ class EigsepFpga:
         fft_shift=FFT_SHIFT,
         corr_acc_len=CORR_ACC_LEN,
         corr_scalar=CORR_SCALAR,
-        pol0_delay=DEFAULT_POL0_DELAY,
+        pol_delay=DEFAULT_POL_DELAY,
         pam_atten=DEFAULT_PAM_ATTEN,
         n_fems=N_FEMS,
         verify=False,
@@ -248,22 +250,27 @@ class EigsepFpga:
         if verify:
             assert self.fpga.read_uint("corr_acc_len") == corr_acc_len
             assert self.fpga.read_uint("corr_scalar") == corr_scalar
-        self.set_pol01_delay(delay=pol0_delay, verify=verify)
+        self.set_pol_delay(delay=pol_delay, verify=verify)
 
-    def set_pol01_delay(self, delay, verify=False):
+    def set_pol_delay(self, delay, verify=False):
         """
-        Set the delay for the pol0 and pol1 inputs.
+        Delay one or more input channels. The same delay is applied to both
+        polarizations, so it can be set for 01, 23, and 45.
 
         Parameters
         ----------
-        delay : int
-            The delay in clock cycles. Max 1024 (2^10).
+        delay : dict
+            Keys are "01", "23", and "45". Values (int) are the delay in 
+            clock cycles. Max 1024 (2^10).
 
         """
-        self.logger.info(f"Setting POL01_DELAY: {delay}")
-        self.fpga.write_int("pfb_pol0_delay", delay)
-        if verify:
-            assert self.fpga.read_uint("pfb_pol0_delay") == delay
+        for key in ["01", "23", "45"]:
+            dly = delay.get(key, 0)
+            if dly != 0:
+                self.logger.info(f"Setting POL{key}_DELAY: {dly}")
+                self.fpga.write_int(f"pfb_pol{key}_delay", dly)
+            if verify:
+                assert self.fpga.read_uint(f"pfb_pol{key}_delay") == dly
 
     def initialize_pams(self, attenuation=DEFAULT_PAM_ATTEN):
         """
