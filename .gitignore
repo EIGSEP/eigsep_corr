@@ -7,3 +7,5 @@ snap_fengines/golden_1g_v1_0/
 notebooks/.ipynb_checkpoints/
 eigsep_corr/data/*.npz
 eigsep_corr/data/*.eig
+gain_calibration/.venv_2/
+gain_calibration/.ipynb_checkpoints/
