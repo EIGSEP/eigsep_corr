@@ -64,7 +64,7 @@ def plot_live(
     if log_scale:
         axs[0].set_ylim(1e1, 1e9)
     else:
-        axs[0].set_ylim(0, 1e6)
+        axs[0].set_ylim(0, 3e6)
     if plot_delay:
         axs[2].set_ylabel("Delay spectrum")
         axs[2].set_xlabel("Delay (ns)")
