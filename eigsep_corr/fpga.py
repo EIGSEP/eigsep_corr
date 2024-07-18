@@ -61,6 +61,7 @@ class EigsepFpga:
         transport=TapcpTransport,
         logger=None,
         read_accelerometer=False,
+        force_program=False,
     ):
         """
         Class for interfacing with the SNAP board.
@@ -69,7 +70,7 @@ class EigsepFpga:
         ----------
         snap_ip : str
             The IP address of the SNAP board. The two used for EIGSEP are
-            10.10.10.13 and 10.10.10.236.
+            10.10.10.13 and 10.10.10.18.
         fpg_file : str
             The path to the fpg file to program the SNAP with.
         program : bool
@@ -84,6 +85,10 @@ class EigsepFpga:
         read_accelerometer : bool
             Whether to read accelerometer data from the platform
             FEM. Default is False.
+        force_program : bool
+            If program is True, decide whether to force casperfpga to program or not. By
+            default, casperfpga skips the programming if the filename is the same, but
+            this flag overrides that.
 
         """
         if logger is None:
@@ -94,7 +99,7 @@ class EigsepFpga:
         self.fpg_file = fpg_file
         self.fpga = casperfpga.CasperFpga(snap_ip, transport=transport)
         if program:
-            self.fpga.upload_to_ram_and_program(self.fpg_file)
+            self.fpga.upload_to_ram_and_program(self.fpg_file, force=force_program)
 
         # blocks
         self.adc = casperfpga.snapadc.SnapAdc(
