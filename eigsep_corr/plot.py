@@ -62,7 +62,7 @@ def plot_live(
     axs[1].set_ylabel("Phase")
     axs[1].set_xlabel("Frequency (MHz)")
     if log_scale:
-        axs[0].set_ylim(1e1, 1e9)
+        axs[0].set_ylim(1e-2, 1e9)
     else:
         axs[0].set_ylim(0, 3e6)
     if plot_delay:
