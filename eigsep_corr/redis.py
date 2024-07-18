@@ -14,7 +14,9 @@ def grab_data(pairs=all_pairs, host=HOST, port=PORT):
         data[p] = r.get(f"data:{p}")
     return data
 
-def grab_imu(host=HOST, port=PORT):
-    r = redis.Redis(host=host, port=port)
+def grab_imu(r):
+    """
+    r : redis.Redis instance
+    """
     pos = {"theta": r.get("theta"), "phi": r.get("phi")}
     return pos
