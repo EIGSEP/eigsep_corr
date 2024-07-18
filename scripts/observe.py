@@ -3,8 +3,8 @@ import logging
 
 from eigsep_corr.fpga import EigsepFpga, FPG_FILE
 
-SNAP_IP = "10.10.10.13"
-# SNAP_IP = "10.10.10.236"
+SNAP_IP = "10.10.10.13"  # C00091
+#SNAP_IP = "10.10.10.18"  # C00069
 SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
@@ -13,7 +13,7 @@ POL_DELAY = {"01": 0, "23": 0, "45": 0}
 FFT_SHIFT = 0x00FF 
 USE_REF = False  # use synth to generate adc clock from 10 MHz
 USE_NOISE = False  # use digital noise instead of ADC data
-PAM_ATTEN = {"0": (15, 15), "1": (15, 15), "2": (15, 15)}  # order is EAST, NORTH
+PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}  # order is EAST, NORTH
 N_FEMS = 0  # number of FEMs to initialize (0-3)
 SAVE_DIR = "/media/eigsep/T7/data"
 LOG_LEVEL = logging.INFO
@@ -35,6 +35,13 @@ parser.add_argument(
     action="store_true",
     default=False,
     help="program eigsep correlator",
+)
+parser.add_argument(
+    "-P",
+    dest="force_program",
+    action="store_true",
+    default=False,
+    help="force program eigsep correlator even if fpg file is the same",
 )
 parser.add_argument(
     "--fpg",
@@ -104,12 +111,23 @@ if args.dummy_mode:
     logger.warning("Running in DUMMY mode")
     from eigsep_corr.testing import DummyEigsepFpga as EigsepFpga
 
+if args.force_program:
+    program = True
+    force_program = True
+elif args.program:
+    program = True
+    force_program = False
+else:
+    program = False
+    force_program = False
+
 fpga = EigsepFpga(
     SNAP_IP,
     fpg_file=args.fpg_file,
-    program=args.program,
+    program=program,
     ref=ref,
-    logger=logger
+    logger=logger,
+    force_program=force_program,
 )
 
 
