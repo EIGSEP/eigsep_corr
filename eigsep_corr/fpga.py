@@ -63,6 +63,7 @@ class EigsepFpga:
         read_accelerometer=False,
         force_program=False,
         read_accelerometer=False,
+        force_program=False,
     ):
         """
         Class for interfacing with the SNAP board.
@@ -93,6 +94,10 @@ class EigsepFpga:
         read_accelerometer : bool
             Whether to read accelerometer data from the platform
             FEM. Default is False.
+        force_program : bool
+            If program is True, decide whether to force casperfpga to program or not. By
+            default, casperfpga skips the programming if the filename is the same, but
+            this flag overrides that.
 
         """
         if logger is None:
