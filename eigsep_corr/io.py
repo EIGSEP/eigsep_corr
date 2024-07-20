@@ -87,7 +87,9 @@ def read_header(filename):
     h['nspec'] = (filesize - h['data_start']) // intlen
     assert h['nspec'] == len(h['acc_cnt']), "Check file size matches integration cnts"
     h['freqs'], h['dfreq'] = utils.calc_freqs_dfreq(h['sample_rate'], h['nchan'])
-    h['inttime'] = inttime = utils.calc_inttime(h['sample_rate'], h['corr_acc_len'])
+    h['inttime'] = inttime = utils.calc_inttime(
+        h['sample_rate'], h['corr_acc_len'], acc_bins=h["acc_bins"]
+    )
     h['times'] = utils.calc_times(h['acc_cnt'], inttime, h['sync_time'])
     return h
 
