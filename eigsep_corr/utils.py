@@ -11,9 +11,9 @@ def calc_freqs_dfreq(sample_rate_Hz, nchan):
     return freqs, dfreq
 
 
-def calc_inttime(sample_rate_Hz, acc_len):
+def calc_inttime(sample_rate_Hz, acc_len, acc_bins=2):
     """Calculate time per integration [s] from sample_freq and acc_len."""
-    inttime = 1 / sample_rate_Hz * acc_len
+    inttime = 1 / sample_rate_Hz * acc_len * acc_bins
     return inttime
 
 
