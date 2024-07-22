@@ -17,6 +17,7 @@ PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}  # order is EAST, NORTH
 N_FEMS = 0  # number of FEMs to initialize (0-3)
 SAVE_DIR = "/media/eigsep/T7/data"
 LOG_LEVEL = logging.INFO
+READ_ACCEL = True  # box fem accelerometer
 
 parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
@@ -128,6 +129,7 @@ fpga = EigsepFpga(
     ref=ref,
     logger=logger,
     force_program=force_program,
+    read_accelerometer=READ_ACCEL,
 )
 
 
