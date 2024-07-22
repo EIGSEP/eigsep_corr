@@ -170,9 +170,12 @@ class EigsepFpga:
         if self.is_synchronized:
             m["sync_time"] = self.sync_time
         if self.platform_redis is not None:
+            theta = str(self.platform_redis.get("theta"))
+            phi = str(self.platform_redis.get("phi"))
+            print(theta, phi)
             accel = {
-                "theta": self.platform_redis.get("theta"),
-                "phi": self.platform_redis.get("phi"),
+                "theta": theta,
+                "phi": phi,
             }
             m["accelerometer"] = accel
         return m
