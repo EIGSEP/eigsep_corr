@@ -62,8 +62,6 @@ class EigsepFpga:
         logger=None,
         read_accelerometer=False,
         force_program=False,
-        read_accelerometer=False,
-        force_program=False,
     ):
         """
         Class for interfacing with the SNAP board.
