@@ -13,13 +13,15 @@ DEFAULT_HEADER = {
     "infochan": 2,  # number of frequency channels used to track acc_cnt
     "nchan": 1024,  # number of frequency channels
     "acc_bins": 2,  # number of accumulation bins per integration
-    "fpg_file": "eigsep_fengine_1g_v2_0_2023-09-30_1811.fpg",
-    "fpg_version": 0x2002,
+    "fpg_file": "eigsep_fengine_1g_v2_3_2024-07-08_1858.fpg",
+    "fpg_version": 0x2003,
     "sample_rate": int(500e6),  # in Hz
     "gain": 4,  # gain of ADC
     "corr_acc_len": 2**28,  # number of samples to accumulate
     "corr_scalar": 2**9,  # 2^9 = 1, using 8 bits after binary point
     "pol01_delay": 0,  # delay in sample clocks of inputs 0/1
+    "pol23_delay": 0,  # delay in sample clocks of inputs 2/3
+    "pol45_delay": 0,  # delay in sample clocks of inputs 4/5
     "pam_atten": {0: (8, 8), 1: (8, 8), 2: (8, 8)},  # PAM attenuations
     "fft_shift": 0x0055,
     "pairs": ['0', '1', '2', '3', '4', '5',

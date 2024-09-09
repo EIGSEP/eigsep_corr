@@ -60,6 +60,7 @@ class EigsepFpga:
         ref=None,
         transport=TapcpTransport,
         logger=None,
+        read_accelerometer=False,
         force_program=False,
     ):
         """
@@ -81,6 +82,16 @@ class EigsepFpga:
             The transport protocol to use. The default is TapcpTransport.
         logger : logging.Logger
             The logger to use. If None, creates a new logger.
+        read_accelerometer : bool
+            Whether to read accelerometer data from the platform
+            FEM. Default is False.
+        force_program : bool
+            If program is True, decide whether to force casperfpga to program or not. By
+            default, casperfpga skips the programming if the filename is the same, but
+            this flag overrides that.
+        read_accelerometer : bool
+            Whether to read accelerometer data from the platform
+            FEM. Default is False.
         force_program : bool
             If program is True, decide whether to force casperfpga to program or not. By
             default, casperfpga skips the programming if the filename is the same, but
@@ -120,6 +131,12 @@ class EigsepFpga:
         self.queue = None
         self.event = None
 
+        # accelerometer data from FEM on platform
+        if read_accelerometer:
+            self.platform_redis = redis.Redis(host="10.10.10.12", port=6379)
+        else:
+            self.platform_redis = None
+
     @property
     def version(self):
         val = self.fpga.read_uint("version_version")
@@ -152,6 +169,15 @@ class EigsepFpga:
             }
         if self.is_synchronized:
             m["sync_time"] = self.sync_time
+        if self.platform_redis is not None:
+            theta = str(self.platform_redis.get("theta"))
+            phi = str(self.platform_redis.get("phi"))
+            print(theta, phi)
+            accel = {
+                "theta": theta,
+                "phi": phi,
+            }
+            m["accelerometer"] = accel
         return m
 
     def _run_adc_test(self, test, n_tries):
@@ -449,6 +475,7 @@ class EigsepFpga:
         write_files=True,
         ntimes=io.DEFAULT_NTIMES,
         header=io.DEFAULT_HEADER,
+        read_accelerometer=False,
     ):
         """
         Observe continuously.
@@ -470,6 +497,9 @@ class EigsepFpga:
             io.DEFAULT_NTIMES (60).
         header : dict
             Header to write to each file. Default is io.DEFAULT_HEADER.
+        read_accelerometer : bool
+            Grab accelerometer data from redis and write to file. Default is
+            False.
 
         """
         self.queue = Queue(maxsize=0)  # XXX infinite size
