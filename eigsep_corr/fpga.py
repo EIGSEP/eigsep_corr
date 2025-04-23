@@ -86,16 +86,9 @@ class EigsepFpga:
             Whether to read accelerometer data from the platform
             FEM. Default is False.
         force_program : bool
-            If program is True, decide whether to force casperfpga to program or not. By
-            default, casperfpga skips the programming if the filename is the same, but
-            this flag overrides that.
-        read_accelerometer : bool
-            Whether to read accelerometer data from the platform
-            FEM. Default is False.
-        force_program : bool
-            If program is True, decide whether to force casperfpga to program or not. By
-            default, casperfpga skips the programming if the filename is the same, but
-            this flag overrides that.
+            If program is True, decide whether to force casperfpga to program
+            or not. By default, casperfpga skips the programming if the
+            filename is the same, but this flag overrides that.
 
         """
         if logger is None:
@@ -359,7 +352,6 @@ class EigsepFpga:
             )
         self.is_synchronized = True
 
-    # XXX check read_auto(i=[])
     def read_auto(self, i=None, unpack=False):
         """
         Read the i'th (counting from 0) autocorrelation spectrum.
@@ -383,7 +375,6 @@ class EigsepFpga:
             }
         return spec
 
-    # XXX check read_cross(ij=[])
     def read_cross(self, ij=None, unpack=False):
         """
         Read the cross correlation spectrum between inputs i and j.
