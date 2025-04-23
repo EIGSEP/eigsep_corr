@@ -46,27 +46,26 @@ else:
 
 if args.dummy_mode:
     logger.warning("Running in DUMMY mode")
-    from eigsep_corr.testing import DummyEigsepFpga as EigsepFpga
+    from eigsep_corr.testing import DummyEigsepFpga
+    fpga = DummyEigsepFpga(ref=ref, logger=logger)
 else:
     from eigsep_corr.fpga import EigsepFpga
-
-if args.force_program:
-    program = True
-    force_program = True
-elif args.program:
-    program = True
-    force_program = False
-else:
-    program = False
-    force_program = False
-
-fpga = EigsepFpga(
-    cfg=cfg,
-    program=program,
-    ref=ref,
-    logger=logger,
-    force_program=force_program,
-)
+    if args.force_program:
+        program = True
+        force_program = True
+    elif args.program:
+        program = True
+        force_program = False
+    else:
+        program = False
+        force_program = False
+    fpga = EigsepFpga(
+        cfg=cfg,
+        program=program,
+        ref=ref,
+        logger=logger,
+        force_program=force_program,
+    )
 
 
 if args.initialize_adc:
