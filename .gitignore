@@ -10,3 +10,4 @@ eigsep_corr/data/*.eig
 gain_calibration/.venv_2/
 gain_calibration/.ipynb_checkpoints/
 .ipynb_checkpoints/
+scripts/test_data
