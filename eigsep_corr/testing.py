@@ -5,12 +5,9 @@ import redis
 from math import floor
 
 from .fpga import EigsepFpga
-from .fpga import SNAP_IP, FPG_FILE
-from .fpga import NCHAN, CORR_ACC_LEN, SAMPLE_RATE
-from .fpga import REDIS_HOST, REDIS_PORT
+from .config import dummy_corr_config
 
-
-class DummyBlock(object):
+class DummyBlock:
     def __init__(self, fpga, attrs=[]):
         self.fpga = fpga
         for attr in attrs:
@@ -18,6 +15,9 @@ class DummyBlock(object):
         self._attributes = {}
 
     def init(self, *args, **kwargs):
+        pass
+
+    def initialize(self, *args, **kwargs):
         pass
 
     def __getattribute__(self, attr):
@@ -31,11 +31,15 @@ class DummyBlock(object):
 
 
 class DummyFpga(DummyBlock):
-    def __init__(self, regs, **kwargs):
+    def __init__(self, cfg, regs=[]):
         self.sync_time = None
-        self.cnt_period = CORR_ACC_LEN / (SAMPLE_RATE * 1e6)
+        self.cnt_period = cfg.corr_acc_len / (cfg.sample_rate * 1e6)
         self.regs = {r: None for r in regs}
-        self.regs['version_version'] = 0x20002
+        major, minor = cfg.fpg_version
+        self.regs["version_version"] = (major << 16) | minor
+
+    def upload_to_ram_and_program(self, fpg_file, force=False):
+        pass
 
     def write_int(self, reg, val):
         self.regs[reg] = val
@@ -53,66 +57,110 @@ class DummyFpga(DummyBlock):
     def read(self, reg, nbytes):
         return b"\x12" * nbytes
 
+class DummyAdcAdc:
+
+    def selectInput(self, inp):
+        pass
+
+
+class DummyAdc(DummyBlock):
+
+    def init(self, sample_rate=500):
+        self.adc = DummyAdcAdc()
+
+    def alignLineClock(self):
+        return []
+
+    def alignFrameClock(self):
+        return []
+
+    def rampTest(self):
+        return []
+
+    def selectAdc(self):
+        pass
+
+    def set_gain(self, gain):
+        pass
+
+
+class DummyPfb(DummyBlock):
+
+    def set_fft_shift(self, fft_shift):
+        pass
+
+class DummyPam(DummyBlock):
+
+    def set_attenuation(self, att_e, att_n):
+        pass
+
+class DummySync(DummyBlock):
+
+    def set_delay(self, delay):
+        pass
+
+    def arm_sync(self):
+        pass
+
+    def sw_sync(self):
+        self.fpga.sync_time = time.time()
 
 class DummyEigsepFpga(EigsepFpga):
     def __init__(
         self,
-        snap_ip=SNAP_IP,
-        fpg_file=FPG_FILE,
+        cfg=dummy_corr_config,
         program=False,
         ref=None,
         transport=None,
         logger=None,
-        sample_rate=SAMPLE_RATE,
-        nchan=NCHAN,
-        acc_len=CORR_ACC_LEN,
-        **kwargs,
+        force_program=False,
     ):
         if logger is None:
             logger = logging.getLogger(__name__)
+            logger.setLevel(logging.DEBUG)
         self.logger = logger
 
-        self.fpg_file = fpg_file
-        self.fpga = DummyFpga([], snap_ip=snap_ip, transport=transport)
+        self.cfg = cfg
+        self.fpga = DummyFpga(self.cfg)
 
-        self.adc = DummyBlock(self.fpga)
-        self.sync = DummyBlock(self.fpga)
+        if program:
+            self.fpga.upload_to_ram_and_program(
+                self.cfg.fpg_file, force=force_program
+            )
+
+        self.adc = DummyAdc(self.fpga)
+        self.sync = DummySync(self.fpga)
         self.noise = DummyBlock(self.fpga)
         self.inp = DummyBlock(self.fpga)
-        self.pfb = DummyBlock(self.fpga)
+        self.pfb = DummyPfb(self.fpga)
         self.blocks = [self.sync, self.noise, self.inp, self.pfb]
 
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
-        self.redis = redis.Redis(REDIS_HOST, port=REDIS_PORT)
+        self.redis = redis.Redis(self.cfg.redis_host, port=self.cfg.redis_port)
 
         self.adc_initialized = False
         self.pams_initialized = False
         self.is_synchronized = False
 
-        self.sample_rate = sample_rate
-        self.nchan = nchan
-        self.acc_len = acc_len
-
         self.file = None
+        self.queue = None
+        self.event = None
 
-    def initialize_adc(self, *args, **kwargs):
-        self.adc_initialized = True
 
-    def initialize_pams(self, *args, **kwargs):
-        self.pams = [DummyBlock(self.fpga), DummyBlock(self.fpga), DummyBlock(self.fpga)]
-        self.pams_initialized = True
+    def initialize_pams(self, attenuation=None):
+        if attenuation is None:
+            attenuation = self.cfg.pam_atten
 
-    def initialize_fems(self, *args, **kwargs):
-        self.fems_initialized = True
-
-    def synchronize(self, delay=0, update_redis=True):
-        self.fpga.sync_time = self.sync_time = time.time()
-        if update_redis:
-            self.redis.set("SYNC_TIME", str(self.sync_time))
-            self.redis.set(
-                "SYNC_DATE",
-                datetime.datetime.fromtimestamp(self.sync_time).isoformat(),
+        self.pams = []
+        for p, (att_e, att_n) in attenuation.items():
+            pam = DummyPam(self.fpga, f"i2c_ant{p}")
+            pam.initialize()
+            self.logger.info(
+                f"Setting pam{p} attenuation to ({att_e}, {att_n})"
             )
-        self.is_synchronized = True
+            pam.set_attenuation(att_e, att_n)
+            self.pams.append(pam)
+        self.blocks.extend(self.pams)
+        self.pams_initialized = True
