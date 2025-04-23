@@ -29,7 +29,7 @@ except ImportError:
     TapcpTransport = None
 
 from . import io
-from .blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
+from .blocks import Input, NoiseGen, Pam, Pfb, Sync
 from .data import DATA_PATH
 
 SNAP_IP = "10.10.10.236"
@@ -49,6 +49,94 @@ N_FEMS = 0  # set to 0 since they're not initialized from SNAP
 NCHAN = 1024
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
+SAVE_DIR = "/media/eigsep/T7/data"
+
+
+def add_args(parser):
+    """
+    Add command line arguments to the parser.
+
+    Parameters
+    ----------
+    parser : argparse.ArgumentParser
+        The argument parser to add arguments to.
+
+    """
+    parser.add_argument(
+        "--dummy",
+        dest="dummy_mode",
+        action="store_true",
+        default=False,
+        help="Run with a dummy SNAP interface",
+    )
+    parser.add_argument(
+        "-p",
+        dest="program",
+        action="store_true",
+        default=False,
+        help="Program the SNAP with the fpg file",
+    )
+    parser.add_argument(
+        "-P",
+        dest="force_program",
+        action="store_true",
+        default=False,
+        help="Force programming the SNAP even if fpg file is the same",
+    )
+    parser.add_argument(
+        "--fpg",
+        dest="fpg_file",
+        default=FPG_FILE,
+        help="Path to the fpg file",
+    )
+    parser.add_argument(
+        "-a",
+        dest="initialize_adc",
+        action="store_true",
+        default=False,
+        help="Initialize the ADCs",
+    )
+    parser.add_ad_argument(
+        "-f",
+        dest="initialize_fpga",
+        action="store_true",
+        default=False,
+        help="Initialize the FPGA",
+    )
+    parser.add_argument(
+        "-s",
+        dest="sync",
+        action="store_true",
+        default=False,
+        help="Synchronize the FPGA",
+    )
+    parser.add_argument(
+        "-r",
+        dest="update_redis",
+        action="store_true",
+        default=False,
+        help="Update redis",
+    )
+    parser.add_argument(
+        "-w",
+        dest="write_files",
+        action="store_true",
+        default=False,
+        help="Write files",
+    )
+    parser.add_argument(
+        "--ntimes",
+        dest="ntimes",
+        type=int,
+        default=io.DEFAULT_NTIMES,
+        help="Number of integrations to write to each file",
+    )
+    parser.add_argument(
+        "--save_dir",
+        dest="save_dir",
+        default=SAVE_DIR,
+        help="Directory to save files",
+    )
 
 
 class EigsepFpga:
@@ -60,7 +148,6 @@ class EigsepFpga:
         ref=None,
         transport=TapcpTransport,
         logger=None,
-        read_accelerometer=False,
         force_program=False,
     ):
         """
@@ -82,9 +169,6 @@ class EigsepFpga:
             The transport protocol to use. The default is TapcpTransport.
         logger : logging.Logger
             The logger to use. If None, creates a new logger.
-        read_accelerometer : bool
-            Whether to read accelerometer data from the platform
-            FEM. Default is False.
         force_program : bool
             If program is True, decide whether to force casperfpga to program
             or not. By default, casperfpga skips the programming if the
@@ -99,7 +183,9 @@ class EigsepFpga:
         self.fpg_file = fpg_file
         self.fpga = casperfpga.CasperFpga(snap_ip, transport=transport)
         if program:
-            self.fpga.upload_to_ram_and_program(self.fpg_file, force=force_program)
+            self.fpga.upload_to_ram_and_program(
+                self.fpg_file, force=force_program
+            )
 
         # blocks
         self.adc = casperfpga.snapadc.SnapAdc(
@@ -124,11 +210,7 @@ class EigsepFpga:
         self.queue = None
         self.event = None
 
-        # accelerometer data from FEM on platform
-        if read_accelerometer:
-            self.platform_redis = redis.Redis(host="10.10.10.12", port=6379)
-        else:
-            self.platform_redis = None
+        # self.platform_redis = redis.Redis(host="10.10.10.12", port=6379)
 
     @property
     def version(self):
@@ -162,15 +244,15 @@ class EigsepFpga:
             }
         if self.is_synchronized:
             m["sync_time"] = self.sync_time
-        if self.platform_redis is not None:
-            theta = str(self.platform_redis.get("theta"))
-            phi = str(self.platform_redis.get("phi"))
-            print(theta, phi)
-            accel = {
-                "theta": theta,
-                "phi": phi,
-            }
-            m["accelerometer"] = accel
+        # if self.platform_redis is not None:
+            # theta = str(self.platform_redis.get("theta"))
+            # phi = str(self.platform_redis.get("phi"))
+            # print(theta, phi)
+            # accel = {
+            #     "theta": theta,
+            #     "phi": phi,
+            # }
+            # m["accelerometer"] = accel
         return m
 
     def _run_adc_test(self, test, n_tries):
@@ -241,7 +323,6 @@ class EigsepFpga:
         corr_scalar=CORR_SCALAR,
         pol_delay=DEFAULT_POL_DELAY,
         pam_atten=DEFAULT_PAM_ATTEN,
-        n_fems=N_FEMS,
         verify=False,
     ):
         """
@@ -260,10 +341,8 @@ class EigsepFpga:
         try:
             # initialize pams
             self.initialize_pams(attenuation=pam_atten)
-            # initialize fems
-            self.initialize_fems(N=n_fems)
         except OSError:
-            self.logger.warn("Couldn't initialize PAMs and FEMs")
+            self.logger.warn("Couldn't initialize PAMs.")
             pass
         self.logger.info(f"Setting FFT_SHIFT: {fft_shift}")
         self.pfb.set_fft_shift(fft_shift)
@@ -284,7 +363,7 @@ class EigsepFpga:
         Parameters
         ----------
         delay : dict
-            Keys are "01", "23", and "45". Values (int) are the delay in 
+            Keys are "01", "23", and "45". Values (int) are the delay in
             clock cycles. Max 1024 (2^10).
 
         """
@@ -318,23 +397,6 @@ class EigsepFpga:
             self.pams.append(pam)
         self.blocks.extend(self.pams)
         self.pams_initialized = True
-
-    def initialize_fems(self, N=N_FEMS):
-        """
-        Initialize the FEMs.
-
-        Parameters
-        ----------
-        N : int
-           Number of FEMs to initialize.
-
-        """
-        self.logger.info(f"Attaching {N} FEMs")
-        self.fems = [Fem(self.fpga, f"i2c_ant{i}") for i in range(N)]
-        for fem in self.fems:
-            fem.initialize()
-        self.blocks.extend(self.fems)
-        self.fems_initialized = True
 
     def synchronize(self, delay=0, update_redis=True):
         self.sync.set_delay(delay)
@@ -466,7 +528,6 @@ class EigsepFpga:
         write_files=True,
         ntimes=io.DEFAULT_NTIMES,
         header=io.DEFAULT_HEADER,
-        read_accelerometer=False,
     ):
         """
         Observe continuously.
@@ -488,9 +549,6 @@ class EigsepFpga:
             io.DEFAULT_NTIMES (60).
         header : dict
             Header to write to each file. Default is io.DEFAULT_HEADER.
-        read_accelerometer : bool
-            Grab accelerometer data from redis and write to file. Default is
-            False.
 
         """
         self.queue = Queue(maxsize=0)  # XXX infinite size
