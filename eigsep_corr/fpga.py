@@ -76,7 +76,7 @@ def add_args(parser):
         default=False,
         help="Initialize the ADCs",
     )
-    parser.add_ad_argument(
+    parser.add_argument(
         "-f",
         dest="initialize_fpga",
         action="store_true",
@@ -371,7 +371,7 @@ class EigsepFpga:
             dly = delay.get(key, 0)
             if dly != 0:
                 self.logger.info(f"Setting POL{key}_DELAY: {dly}")
-                self.fpga.write_int(f"pfb_pol{key}_delay", dly)
+            self.fpga.write_int(f"pfb_pol{key}_delay", dly)
             if verify:
                 assert self.fpga.read_uint(f"pfb_pol{key}_delay") == dly
 
