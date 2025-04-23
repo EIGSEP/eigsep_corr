@@ -28,7 +28,7 @@ except ImportError:
     logging.warning("Running without casperfpga installed")
     TapcpTransport = None
 
-from . import io
+from eigsep_observing import io
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync
 from .data import DATA_PATH
 
