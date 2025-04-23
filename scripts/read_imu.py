@@ -10,7 +10,7 @@ while True:
     try:
         pos = grab_imu(r)
         print(pos)
-        time.sleep(1.)
+        time.sleep(1.0)
     except KeyboardInterrupt:
         print("Stopping.")
         break

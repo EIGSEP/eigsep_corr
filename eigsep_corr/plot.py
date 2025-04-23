@@ -44,7 +44,7 @@ def plot_live(
         elif i == 1:
             colors[p] = "lime"
         else:  # pairs 0-9, and repeats if more than 12 pairs
-            colors[p] = f"C{i-2}"
+            colors[p] = f"C{i - 2}"
 
     mag_lines = {}
     phase_lines = {}
@@ -96,7 +96,7 @@ def plot_live(
                 cnt = redis.get("ACC_CNT")
                 print(cnt)
                 ymax_mag = np.maximum(ymax_mag, data.max())
-                #axs[0].set_ylim(1e1, ymax_mag)
+                # axs[0].set_ylim(1e1, ymax_mag)
                 if len(p) == 1:  # auto
                     mag_lines[p].set_ydata(data)
                 else:  # cross

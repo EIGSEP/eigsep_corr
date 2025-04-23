@@ -1,11 +1,11 @@
 import time
-import datetime
 import logging
 import redis
 from math import floor
 
 from .fpga import EigsepFpga
 from .config import dummy_corr_config
+
 
 class DummyBlock:
     def __init__(self, fpga, attrs=[]):
@@ -23,7 +23,7 @@ class DummyBlock:
     def __getattribute__(self, attr):
         try:
             return object.__getattribute__(self, attr)
-        except(AttributeError):
+        except AttributeError:
             return self
 
     def __call__(self, *args, **kwargs):
@@ -45,7 +45,7 @@ class DummyFpga(DummyBlock):
         self.regs[reg] = val
 
     def read_int(self, reg):
-        if reg == 'corr_acc_cnt':
+        if reg == "corr_acc_cnt":
             acc_cnt = (time.time() - self.sync_time) / self.cnt_period
             acc_cnt = int(floor(acc_cnt))
             return acc_cnt
@@ -56,6 +56,7 @@ class DummyFpga(DummyBlock):
 
     def read(self, reg, nbytes):
         return b"\x12" * nbytes
+
 
 class DummyAdcAdc:
 
@@ -89,10 +90,12 @@ class DummyPfb(DummyBlock):
     def set_fft_shift(self, fft_shift):
         pass
 
+
 class DummyPam(DummyBlock):
 
     def set_attenuation(self, att_e, att_n):
         pass
+
 
 class DummySync(DummyBlock):
 
@@ -104,6 +107,7 @@ class DummySync(DummyBlock):
 
     def sw_sync(self):
         self.fpga.sync_time = time.time()
+
 
 class DummyEigsepFpga(EigsepFpga):
     def __init__(
@@ -147,7 +151,6 @@ class DummyEigsepFpga(EigsepFpga):
         self.file = None
         self.queue = None
         self.event = None
-
 
     def initialize_pams(self, attenuation=None):
         if attenuation is None:

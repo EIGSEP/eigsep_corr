@@ -7,12 +7,14 @@ all_pairs = autos + crosses
 HOST = "10.10.10.10"
 PORT = 6379
 
+
 def grab_data(pairs=all_pairs, host=HOST, port=PORT):
     r = redis.Redis(host=host, port=port)
     data = {}
     for p in pairs:
         data[p] = r.get(f"data:{p}")
     return data
+
 
 def grab_imu(r):
     """
