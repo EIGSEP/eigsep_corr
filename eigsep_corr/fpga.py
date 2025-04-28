@@ -204,8 +204,10 @@ class EigsepFpga:
         )
 
     @property
-    def metadata(self):
+    def header(self):
         m = {
+            "dtype": self.cfg.dtype,
+            "acc_bins": self.cfg.acc_bins,
             "nchan": self.cfg.nchan,
             "fpg_file": self.cfg.fpg_file,
             "fpg_version": self.version,
@@ -536,8 +538,6 @@ class EigsepFpga:
         timeout=10,
         update_redis=True,
         write_files=True,
-        ntimes=io.DEFAULT_NTIMES,
-        header=io.DEFAULT_HEADER,
     ):
         """
         Observe continuously.
@@ -552,13 +552,10 @@ class EigsepFpga:
             Whether to update redis.
         write_files : bool
             Whether to write data to files.
-        ntimes : int
-            Number of integrations to write to each file. Default is
-            io.DEFAULT_NTIMES (60).
-        header : dict
-            Header to write to each file. Default is io.DEFAULT_HEADER.
-
         """
+        if pairs is None:
+            pairs = self.autos + self.crosses
+
         self.queue = Queue(maxsize=0)  # XXX infinite size
         self.event = Event()
 
@@ -566,12 +563,13 @@ class EigsepFpga:
         thd.start()
 
         if write_files:
-            # update header
-            for k, v in self.metadata.items():
-                header[k] = v
             self.file = io.File(
-                self.cfg.save_dir, ntimes=ntimes, header=header
+                self.cfg.save_dir,
+                pairs,
+                self.cfg.ntimes,
+                self.header,
             )
+
 
         while not self.event.is_set() or not self.queue.empty():
             d = self.queue.get()

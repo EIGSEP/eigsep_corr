@@ -23,6 +23,8 @@ class CorrConfig:
     corr_acc_len: int = 2**28  # increment corr_acc_cnt by ~1/second
     corr_scalar: int = 2**9  # 8 bits after binary point so 2**9 = 1
     corr_word: int = 4  # 4 bytes per word
+    dtype: tuple[str, str] = ("int32", ">")  # dtype, endian
+    acc_bins: int = 2
     pam_atten: dict[int, tuple[int, int]] = field(
         default_factory=lambda: {0: (8, 8), 1: (8, 8), 2: (8, 8)}
     )
@@ -33,6 +35,7 @@ class CorrConfig:
     redis_host: str = "localhost"
     redis_port: int = 6379
     save_dir: str = "media/eigsep/T7/data"
+    ntimes: int = 60  # number of times per file
 
 
 default_corr_config = CorrConfig()
