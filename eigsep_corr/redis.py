@@ -1,4 +1,12 @@
 import redis
+import warnings
+
+warnings.warn(
+    "This module is deprecated. Use the EigsepRedis class in "
+    "eigsep_observing.redis instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 autos = ["0", "1", "2", "3", "4", "5"]
 crosses = ["02", "04", "24", "13", "15", "35"]

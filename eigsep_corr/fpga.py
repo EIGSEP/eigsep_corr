@@ -13,7 +13,6 @@ CORR_SCALAR (18_8).
 
 import datetime
 import logging
-import redis
 import struct
 import time
 from threading import Event, Thread
@@ -28,6 +27,7 @@ except ImportError:
     TapcpTransport = None
 
 from eigsep_observing import io
+from eigsep_observing import EigsepRedis
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync
 from .config import default_corr_config
 
@@ -178,7 +178,7 @@ class EigsepFpga:
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
-        self.redis = redis.Redis(self.cfg.redis_host, port=self.cfg.redis_port)
+        self.redis = EigsepRedis()
 
         self.adc_initialized = False
         self.pams_initialized = False
@@ -187,8 +187,6 @@ class EigsepFpga:
         self.file = None
         self.queue = None
         self.event = None
-
-        # self.platform_redis = redis.Redis(host="10.10.10.12", port=6379)
 
     @property
     def version(self):
@@ -204,7 +202,7 @@ class EigsepFpga:
         )
 
     @property
-    def header(self):
+    def metadata(self):
         m = {
             "dtype": self.cfg.dtype,
             "acc_bins": self.cfg.acc_bins,
@@ -227,15 +225,8 @@ class EigsepFpga:
             }
         if self.is_synchronized:
             m["sync_time"] = self.sync_time
-        # if self.platform_redis is not None:
-        # theta = str(self.platform_redis.get("theta"))
-        # phi = str(self.platform_redis.get("phi"))
-        # print(theta, phi)
-        # accel = {
-        #     "theta": theta,
-        #     "phi": phi,
-        # }
-        # m["accelerometer"] = accel
+        redis_hdr = self.redis.get_metadata()
+        m.update(redis_hdr)
         return m
 
     def _run_adc_test(self, test, n_tries):
@@ -412,8 +403,8 @@ class EigsepFpga:
             self.logger.info(f"Synchronized at {sync_time}.")
         self.sync_time = sync_time
         if update_redis:
-            self.redis.set("SYNC_TIME", str(sync_time))
-            self.redis.set(
+            self.redis.add_raw("SYNC_TIME", str(sync_time))
+            self.redis.add_raw(
                 "SYNC_DATE",
                 datetime.datetime.fromtimestamp(sync_time).isoformat(),
             )
@@ -496,14 +487,31 @@ class EigsepFpga:
                 d = d[
                     : self.cfg.corr_word * 2 * self.cfg.nchan
                 ]  # two for real/imag
-            self.redis.set(f"data:{p}", d)
-        self.redis.set("ACC_CNT", cnt)
-        self.redis.set("updated_unix", int(time.time()))
-        self.redis.set("updated_date", datetime.datetime.now().isoformat())
+            self.redis.add_raw(f"data:{p}", d)
+        self.redis.add_raw("ACC_CNT", cnt)
+        self.redis.add_raw("updated_unix", int(time.time()))
+        self.redis.add_raw("updated_date", datetime.datetime.now().isoformat())
 
-    def _read_integrations(self, pairs, timeout=10):
+    def _read_integrations(self, pairs, timeout=10, n_ints=None):
+        """
+        Read integrated correlations from the SNAP board.
+
+        Parameters
+        ----------
+        pairs : list
+            List of pairs to read.
+        timeout : float
+            Number of seconds to wait for a new integration before timing out.
+        n_ints : int
+            Number of integrations to read. Default is None, which reads
+            indefinitely.
+
+        """
         cnt = self.fpga.read_int("corr_acc_cnt")
         t = time.time()
+
+        if n_ints is not None:
+            first_cnt = cnt
 
         while time.time() < t + timeout and not self.event.is_set():
             new_cnt = self.fpga.read_int("corr_acc_cnt")
@@ -524,6 +532,11 @@ class EigsepFpga:
                 )
             self.queue.put({"data": data, "cnt": cnt})
             t = time.time()
+            if n_ints is not None and cnt >= first_cnt + n_ints:
+                self.logger.info(
+                    f"Read {n_ints} integrations, stopping read thread."
+                )
+                self.end_observing()
 
     def end_observing(self):
         try:
@@ -536,6 +549,7 @@ class EigsepFpga:
         self,
         pairs=None,
         timeout=10,
+        n_ints=None,
         update_redis=True,
         write_files=True,
     ):
@@ -548,6 +562,9 @@ class EigsepFpga:
             List of pairs to read. Default is None, which reads all pairs.
         timeout : float
             Number of seconds to wait for a new integration before returning.
+        n_ints : int
+            Number of integrations to read. Default is None, which reads
+            indefinitely.
         update_redis : bool
             Whether to update redis.
         write_files : bool
@@ -556,10 +573,14 @@ class EigsepFpga:
         if pairs is None:
             pairs = self.autos + self.crosses
 
-        self.queue = Queue(maxsize=0)  # XXX infinite size
+        self.queue = Queue(maxsize=0)
         self.event = Event()
 
-        thd = Thread(target=self._read_integrations, args=(pairs, timeout))
+        thd = Thread(
+            target=self._read_integrations,
+            args=(pairs),
+            kwargs={"timeout": timeout, "n_ints": n_ints},
+        )
         thd.start()
 
         if write_files:
@@ -567,12 +588,11 @@ class EigsepFpga:
                 self.cfg.save_dir,
                 pairs,
                 self.cfg.ntimes,
-                self.header,
+                self.metadata,
             )
 
-
         while not self.event.is_set() or not self.queue.empty():
-            d = self.queue.get()
+            d = self.queue.get(block=True, timeout=None)
             if d is None:
                 if self.event.is_set():
                     self.logger.info("End of queue, processing finished.")

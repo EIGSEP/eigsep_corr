@@ -19,8 +19,8 @@ def plot_live(
 
     Parameters
     ----------
-    redis: redis.Redis
-        Instance of redis.Redis object where data is stored.
+    redis: EigsepRedis
+        Instance of eigsep_observing.EigsepRedis object where data is stored.
     pairs : str or list of str
         Correlation pairs to plot. Defaults to all pairs.
     x : array-like
@@ -92,8 +92,8 @@ def plot_live(
         while True:
             for p in pairs:
                 dt = np.dtype(np.int32).newbyteorder(">")
-                data = np.frombuffer(redis.get(f"data:{p}"), dtype=dt)
-                cnt = redis.get("ACC_CNT")
+                data = np.frombuffer(redis.get_raw(f"data:{p}"), dtype=dt)
+                cnt = redis.get_raw("ACC_CNT")
                 print(cnt)
                 ymax_mag = np.maximum(ymax_mag, data.max())
                 # axs[0].set_ylim(1e1, ymax_mag)

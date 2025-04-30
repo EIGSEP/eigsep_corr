@@ -32,8 +32,6 @@ class CorrConfig:
         default_factory=lambda: {"01": 0, "23": 0, "45": 0}
     )
     nchan: int = 1024
-    redis_host: str = "localhost"
-    redis_port: int = 6379
     save_dir: str = "media/eigsep/T7/data"
     ntimes: int = 60  # number of times per file
 
