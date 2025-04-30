@@ -25,7 +25,7 @@ args = parser.parse_args()
 # see eigsep_corr.config for default values
 # parameters are: snap_ip, sample_rate, fpg_file, fpg_version, adc_gain,
 # fft_shift, corr_acc_len, corr_scalar, corr_word, pam_atten, pol_delay,
-# nchan, redis_host, redis_port, save_dir
+# nchan, save_dir
 cfg = CorrConfig(
     snap_ip=SNAP_IP,
     fpg_file=args.fpg_file,
