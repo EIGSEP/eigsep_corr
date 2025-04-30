@@ -34,6 +34,7 @@ cfg = CorrConfig(
     fft_shift=FFT_SHIFT,
     pam_atten=PAM_ATTEN,
     save_dir=args.save_dir,
+    ntimes=args.ntimes,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,6 @@ try:
         timeout=10,
         update_redis=args.update_redis,
         write_files=args.write_files,
-        ntimes=args.ntimes,
     )
 except KeyboardInterrupt:
     logger.info("Exiting.")
