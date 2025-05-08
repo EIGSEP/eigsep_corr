@@ -13,10 +13,10 @@ CORR_SCALAR (18_8).
 
 import datetime
 import logging
+import queue
 import struct
 import time
 from threading import Event, Thread
-from queue import Queue
 import numpy as np
 
 try:
@@ -186,7 +186,8 @@ class EigsepFpga:
 
         self.file = None
         self.queue = None
-        self.event = None
+        self.pause_event = None
+        self.stop_event = None
 
     @property
     def version(self):
@@ -513,37 +514,38 @@ class EigsepFpga:
         if n_ints is not None:
             first_cnt = cnt
 
-        while time.time() < t + timeout and not self.event.is_set():
-            new_cnt = self.fpga.read_int("corr_acc_cnt")
-            if new_cnt == cnt:
-                time.sleep(0.01)
-                continue
-            if new_cnt > cnt + 1:
-                self.logger.warning(
-                    f"Missed {new_cnt - cnt - 1} integration(s)."
-                )
-            cnt = new_cnt
-            self.logger.info(f"Reading acc_cnt={cnt}")
-            data = self.read_data(pairs=pairs, unpack=False)
-            if cnt != self.fpga.read_int("corr_acc_cnt"):
-                self.logger.error(
-                    f"Read of acc_cnt={cnt} FAILED to complete before "
-                    "next integration."
-                )
-            self.queue.put({"data": data, "cnt": cnt})
-            t = time.time()
-            if n_ints is not None and cnt >= first_cnt + n_ints:
-                self.logger.info(
-                    f"Read {n_ints} integrations, stopping read thread."
-                )
-                self.end_observing()
+        try:
+            while time.time() < t + timeout and not self.stop_event.is_set():
+                new_cnt = self.fpga.read_int("corr_acc_cnt")
+                if new_cnt == cnt:
+                    time.sleep(0.01)
+                    continue
+                if new_cnt > cnt + 1:
+                    self.logger.warning(
+                        f"Missed {new_cnt - cnt - 1} integration(s)."
+                    )
+                cnt = new_cnt
+                self.logger.info(f"Reading acc_cnt={cnt}")
+                data = self.read_data(pairs=pairs, unpack=False)
+                if cnt != self.fpga.read_int("corr_acc_cnt"):
+                    self.logger.error(
+                        f"Read of acc_cnt={cnt} FAILED to complete before "
+                        "next integration."
+                    )
+                self.queue.put({"data": data, "cnt": cnt})
+                t = time.time()
+                if n_ints is not None and cnt >= first_cnt + n_ints:
+                    self.logger.info(
+                        f"Read {n_ints} integrations, stopping read thread."
+                    )
+                    break
+        finally:
+            self.end_observing()
 
     def end_observing(self):
-        try:
-            self.event.set()
-            self.queue.put(None)  # signals end of observing
-        except AttributeError:
-            pass
+        """End observing thread."""
+        self.stop_event.set()
+        self.queue.put(None)  # signals end of observing
 
     def observe(
         self,
@@ -570,11 +572,15 @@ class EigsepFpga:
         write_files : bool
             Whether to write data to files.
         """
+        self.logger.warning(
+            "This function is deprecated, use EigObserver.observe from "
+            "eigsep_observing instead."
+        )
         if pairs is None:
             pairs = self.autos + self.crosses
 
-        self.queue = Queue(maxsize=0)
-        self.event = Event()
+        self.queue = queue.Queue(maxsize=0)
+        self.stop_event = Event()
 
         thd = Thread(
             target=self._read_integrations,
@@ -591,10 +597,17 @@ class EigsepFpga:
                 self.metadata,
             )
 
-        while not self.event.is_set() or not self.queue.empty():
-            d = self.queue.get(block=True, timeout=None)
+        while not self.stop_event.is_set():
+            try:
+                d = self.queue.get(block=True, timeout=timeout)
+            except queue.Empty:
+                self.logger.warning(
+                    f"Queue empty after {timeout} seconds, continuing to "
+                    "wait for data."
+                )
+                continue
             if d is None:
-                if self.event.is_set():
+                if self.stop_event.is_set():
                     self.logger.info("End of queue, processing finished.")
                     break
                 else:
