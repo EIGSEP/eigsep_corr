@@ -28,8 +28,8 @@ except ImportError:
 
 from eigsep_observing import io
 from eigsep_observing import EigsepRedis
+from eigsep_observing.config import default_corr_config
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync
-from .config import default_corr_config
 
 
 def add_args(parser):
@@ -124,7 +124,6 @@ class EigsepFpga:
         self,
         cfg=default_corr_config,
         program=False,
-        ref=None,
         transport=TapcpTransport,
         logger=None,
         force_program=False,
@@ -138,9 +137,6 @@ class EigsepFpga:
             The configuration object containing settings for the SNAP.
         program : bool
             Whether to program the SNAP with the fpg file.
-        ref : int
-            The reference clock frequency in MHz. If None, uses the
-            500 MHz clock on the SNAP board. Typically set to None or 10.
         transport : casperfpga.transport_tapcp.TapcpTransport
             The transport protocol to use. The default is TapcpTransport.
         logger : logging.Logger
@@ -165,6 +161,10 @@ class EigsepFpga:
                 self.cfg.fpg_file, force=force_program
             )
 
+        if self.cfg.use_ref:
+            ref = 10  # use 10 MHz reference clock to generate ADC clocks
+        else:
+            ref = None
         # blocks
         self.adc = casperfpga.snapadc.SnapAdc(
             self.fpga, num_chans=2, resolution=8, ref=ref
@@ -204,6 +204,11 @@ class EigsepFpga:
 
     @property
     def metadata(self):
+        """
+        This attribute only includes metadata that is not changing during
+        observation. Live metadata (from sensors) is pulled from Redis.
+        
+        """
         m = {
             "dtype": self.cfg.dtype,
             "acc_bins": self.cfg.acc_bins,
@@ -226,8 +231,6 @@ class EigsepFpga:
             }
         if self.is_synchronized:
             m["sync_time"] = self.sync_time
-        redis_hdr = self.redis.get_metadata()
-        m.update(redis_hdr)
         return m
 
     def _run_adc_test(self, test, n_tries):
@@ -348,6 +351,23 @@ class EigsepFpga:
             assert self.fpga.read_uint("corr_acc_len") == corr_acc_len
             assert self.fpga.read_uint("corr_scalar") == corr_scalar
         self.set_pol_delay(delay=pol_delay, verify=verify)
+
+    def set_input(self):
+        """
+        Set the input to either noise or ADC based on the configuration.
+        This method is called after initializing the ADC and FPGA.
+        """
+        self.noise.set_seed(stream=None, seed=0)
+        if self.cfg.use_noise:
+            self.logger.warning("Switching to noise input.")
+            self.inp.use_noise(stream=None)
+            self.sync.arm_noise()
+            for i in range(3):
+                self.sync.sw_sync()
+            self.logger.info("Synchronized noise")
+        else:
+            self.logger.info("Switching to ADC input.")
+            self.inp.use_adc(stream=None)
 
     def set_pol_delay(self, delay, verify=False):
         """
@@ -489,9 +509,11 @@ class EigsepFpga:
                     : self.cfg.corr_word * 2 * self.cfg.nchan
                 ]  # two for real/imag
             self.redis.add_raw(f"data:{p}", d)
-        self.redis.add_raw("ACC_CNT", cnt)
-        self.redis.add_raw("updated_unix", int(time.time()))
-        self.redis.add_raw("updated_date", datetime.datetime.now().isoformat())
+        self.redis.add_metadata("acc_cnt", cnt)
+        self.redis.add_metadata("updated_unix", int(time.time()))
+        self.redis.add_metadata(
+            "updated_date", datetime.datetime.now().isoformat()
+        )
 
     def _read_integrations(self, pairs, timeout=10, n_ints=None):
         """
