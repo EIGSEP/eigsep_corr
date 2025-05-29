@@ -2,7 +2,7 @@ import argparse
 import logging
 
 from eigsep_corr.fpga import add_args
-from eigsep_corr.config import CorrConfig
+from eigsep_observing.config import CorrConfig
 
 LOG_LEVEL = logging.DEBUG
 
