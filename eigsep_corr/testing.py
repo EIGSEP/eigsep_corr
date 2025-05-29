@@ -66,7 +66,7 @@ class DummyAdcAdc:
 
 class DummyAdc(DummyBlock):
 
-    def init(self, sample_rate=500):
+    def init(self, sample_rate=500, ref=None):
         self.adc = DummyAdcAdc()
 
     def alignLineClock(self):
@@ -105,8 +105,26 @@ class DummySync(DummyBlock):
     def arm_sync(self):
         pass
 
+    def arm_noise(self):
+        pass
+
     def sw_sync(self):
         self.fpga.sync_time = time.time()
+
+
+class DummyNoise(DummyBlock):
+
+    def set_seed(self, steam=None, seed=0):
+        pass
+
+
+class DummyInput(DummyBlock):
+
+    def use_noise(self, stream=None):
+        pass
+
+    def use_adc(self, stream=None):
+        pass
 
 
 class DummyEigsepFpga(EigsepFpga):
@@ -114,7 +132,6 @@ class DummyEigsepFpga(EigsepFpga):
         self,
         cfg=dummy_corr_config,
         program=False,
-        ref=None,
         transport=None,
         logger=None,
         force_program=False,
@@ -126,16 +143,19 @@ class DummyEigsepFpga(EigsepFpga):
 
         self.cfg = cfg
         self.fpga = DummyFpga(self.cfg)
-
         if program:
             self.fpga.upload_to_ram_and_program(
                 self.cfg.fpg_file, force=force_program
             )
 
-        self.adc = DummyAdc(self.fpga)
+        if self.cfg.use_ref:
+            ref = 10
+        else:
+            ref = None
+        self.adc = DummyAdc(self.fpga, ref=ref)
         self.sync = DummySync(self.fpga)
-        self.noise = DummyBlock(self.fpga)
-        self.inp = DummyBlock(self.fpga)
+        self.noise = DummyNoise(self.fpga)
+        self.inp = DummyInput(self.fpga)
         self.pfb = DummyPfb(self.fpga)
         self.blocks = [self.sync, self.noise, self.inp, self.pfb]
 

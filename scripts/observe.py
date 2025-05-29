@@ -41,7 +41,7 @@ if args.dummy_mode:
     logger.warning("Running in DUMMY mode")
     from eigsep_corr.testing import DummyEigsepFpga
 
-    fpga = DummyEigsepFpga(ref=ref, logger=logger)
+    fpga = DummyEigsepFpga(logger=logger)
 else:
     from eigsep_corr.fpga import EigsepFpga
 
