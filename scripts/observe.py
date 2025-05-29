@@ -4,16 +4,7 @@ import logging
 from eigsep_corr.fpga import add_args
 from eigsep_corr.config import CorrConfig
 
-SNAP_IP = "10.10.10.13"  # C00091
-# SNAP_IP = "10.10.10.18"  # C00069
-GAIN = 4  # ADC gain
-FFT_SHIFT = 0x00FF
-PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}  # order is EAST, NORTH
-FPG_VERSION = (2, 3)
-
-USE_REF = False  # use synth to generate adc clock from 10 MHz
-USE_NOISE = False  # use digital noise instead of ADC data
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.DEBUG
 
 parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
@@ -22,28 +13,29 @@ parser = argparse.ArgumentParser(
 add_args(parser)
 args = parser.parse_args()
 
-# see eigsep_corr.config for default values
-# parameters are: snap_ip, sample_rate, fpg_file, fpg_version, adc_gain,
-# fft_shift, corr_acc_len, corr_scalar, corr_word, pam_atten, pol_delay,
-# nchan, save_dir
 cfg = CorrConfig(
-    snap_ip=SNAP_IP,
+    snap_ip="10.10.10.13",
+    sample_rate=500,
+    use_ref=True,
+    use_noise=False,
     fpg_file=args.fpg_file,
-    fpg_version=FPG_VERSION,
-    adc_gain=GAIN,
-    fft_shift=FFT_SHIFT,
-    pam_atten=PAM_ATTEN,
+    fpg_version=(2, 3),
+    adc_gain=4,
+    fft_shift=0x00FF,
+    corr_acc_len=2**28,
+    corr_scalar=2**9,
+    corr_word=4,
+    dtype=("int32", ">"),
+    acc_bins=2,
+    pam_atten={"0": (8, 8), "1": (8, 8), "2": (8, 8)},
+    pol_delay={"01": 0, "23": 0, "45": 0},
+    nchan=1024,
     save_dir=args.save_dir,
     ntimes=args.ntimes,
 )
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=LOG_LEVEL)
-
-if USE_REF:
-    ref = 10
-else:
-    ref = None
 
 if args.dummy_mode:
     logger.warning("Running in DUMMY mode")
@@ -65,7 +57,6 @@ else:
     fpga = EigsepFpga(
         cfg=cfg,
         program=program,
-        ref=ref,
         logger=logger,
         force_program=force_program,
     )
@@ -80,17 +71,7 @@ if args.initialize_fpga:
 fpga.check_version()
 
 # set input
-fpga.noise.set_seed(stream=None, seed=0)
-if USE_NOISE:
-    fpga.logger.warning("Switching to noise input")
-    fpga.inp.use_noise(stream=None)
-    fpga.sync.arm_noise()
-    for i in range(3):
-        fpga.sync.sw_sync()
-    fpga.logger.info("Synchronized noise.")
-else:
-    fpga.logger.info("Switching to ADC input")
-    fpga.inp.use_adc(stream=None)
+fpga.set_input()
 
 # synchronize
 if args.sync:
