@@ -203,7 +203,7 @@ class EigsepFpga:
         )
 
     @property
-    def metadata(self):
+    def header(self):
         """
         This attribute only includes metadata that is not changing during
         observation. Live metadata (from sensors) is pulled from Redis.
@@ -716,7 +716,7 @@ class EigsepFpga:
                 self.cfg.save_dir,
                 pairs,
                 self.cfg.ntimes,
-                self.metadata,
+                self.header,
             )
 
         while not self.stop_event.is_set():
