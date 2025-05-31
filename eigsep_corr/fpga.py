@@ -431,6 +431,27 @@ class EigsepFpga:
             )
         self.is_synchronized = True
 
+    def unpack_data(self, data):
+        """
+        Unpack raw correlation data into numpy arrays.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary with keys as the input pairs and values as raw
+            correlation data in bytes.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys as the input pairs and values as numpy arrays
+            of unpacked correlation data.
+
+        """
+        return {
+            k: np.frombuffer(v, dtype=self.data_type) for k, v in data.items()
+        }
+
     def _read_spec(self, spec_type, i, unpack):
         """
         Read a single spectrum from the FPGA. This is a helper method for
@@ -471,9 +492,9 @@ class EigsepFpga:
         for k in i:
             key = f"corr_{spec_type}_{k}_dout"
             data = self.fpga.read(key, nbytes)
-            if unpack:
-                data = np.frombuffer(data, dtype=self.data_type)
             spec[k] = data
+        if unpack:
+            spec = self.unpack_data(spec)
         return spec
 
     def read_auto(self, i=None, unpack=False):
