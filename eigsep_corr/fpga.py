@@ -14,7 +14,6 @@ CORR_SCALAR (18_8).
 import datetime
 import logging
 import queue
-import struct
 import time
 from threading import Event, Thread
 import numpy as np
@@ -177,6 +176,7 @@ class EigsepFpga:
 
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
+        self.data_type = io.build_dtype(*self.cfg.dtype)
 
         self.redis = EigsepRedis()
 
@@ -207,7 +207,7 @@ class EigsepFpga:
         """
         This attribute only includes metadata that is not changing during
         observation. Live metadata (from sensors) is pulled from Redis.
-        
+
         """
         m = {
             "dtype": self.cfg.dtype,
@@ -431,6 +431,51 @@ class EigsepFpga:
             )
         self.is_synchronized = True
 
+    def _read_spec(self, spec_type, i, unpack):
+        """
+        Read a single spectrum from the FPGA. This is a helper method for
+        read_auto and read_cross and should not be called directly.
+
+        Parameters
+        ----------
+        spec_type : str
+            The type of spectrum to read, either 'auto' or 'cross'.
+        i : str, list of str, or None
+            The identifier of the spectrum to read, e.g. '0', '02'. If None,
+            reads all spectra of the specified type.
+        unpack : bool
+            Whether to unpack the data into numpy arrays. Default is False,
+            which returns raw bytes.
+
+        Returns
+        -------
+        spec : bytes or numpy array
+            The spectrum data. If unpack is True, returns a numpy array of
+            integers, otherwise returns raw bytes.
+
+        """
+        if i is None:
+            if spec_type == "auto":
+                i = self.autos
+            else:
+                i = self.crosses
+        elif isinstance(i, str):
+            i = [i]
+        if len(i) == 0:
+            return {}
+        # total number of bytes to read, factor of 2 is for odd/even
+        nbytes = self.cfg.corr_word * 2 * self.cfg.nchan
+        if spec_type == "cross":
+            nbytes *= 2  # real/imag for cross correlations
+        spec = {}
+        for k in i:
+            key = f"corr_{spec_type}_{k}_dout"
+            data = self.fpga.read(key, nbytes)
+            if unpack:
+                data = np.frombuffer(data, dtype=self.data_type)
+            spec[k] = data
+        return spec
+
     def read_auto(self, i=None, unpack=False):
         """
         Read the i'th (counting from 0) autocorrelation spectrum.
@@ -440,52 +485,75 @@ class EigsepFpga:
         i : str
             Which autocorrelation to read. Default is None, which reads all
             autocorrelations.
+        unpack : bool
+            Whether to unpack the data into numpy arrays. Default is False,
+            which returns raw bytes.
+
+        Returns
+        -------
+        spec : dict
+            Dictionary with keys as autocorrelation identifiers and values as
+            the corresponding spectra. If unpack is True, values are numpy
+            arrays of integers.
+
+        Notes
+        -----
+        The first half of the data is the 'even' integration, and the second
+        half is the 'odd' integration.
+
         """
-        if i is None:
-            i = self.autos
-        elif type(i) is str:
-            i = [i]
-        nbytes = self.cfg.corr_word * 2 * self.cfg.nchan  # odd/even
-        spec = {k: self.fpga.read(f"corr_auto_{k}_dout", nbytes) for k in i}
-        if unpack:
-            spec = {
-                k: np.array(
-                    struct.unpack(f">{nbytes // self.cfg.corr_word}l", v)
-                )
-                for k, v in spec.items()
-            }
-        return spec
+        return self._read_spec("auto", i, unpack)
 
     def read_cross(self, ij=None, unpack=False):
         """
-        Read the cross correlation spectrum between inputs i and j.
+        Read the cross-correlation spectrum between inputs i and j.
 
         Parameters
         ----------
         ij : str
-            Which correlation to read, e.g. "02". Assuming N<M. Default is
-            None, which reads all cross correlations.
+            Which cross-correlation to read. Default is None, which reads all
+            cross-correlations.
+        unpack : bool
+            Whether to unpack the data into numpy arrays. Default is False,
+            which returns raw bytes.
+
+        Returns
+        -------
+        spec : dict
+            Dictionary with keys as autocorrelation identifiers and values as
+            the corresponding spectra. If unpack is True, values are numpy
+            arrays of integers.
+
+        Notes
+        -----
+        The first half of the data is the 'even' integration, and the second
+        half is the 'odd' integration. Real and imaginary parts are
+        interleaved, with every other sample being the real part and the
+        following sample being the imaginary part.
+
         """
-        if ij is None:
-            ij = self.crosses
-        elif type(ij) is str:
-            ij = [ij]
-        nbytes = (
-            self.cfg.corr_word * 2 * 2 * self.cfg.nchan
-        )  # odd/even, real/imag
-        spec = {k: self.fpga.read(f"corr_cross_{k}_dout", nbytes) for k in ij}
-        if unpack:
-            spec = {
-                k: np.array(
-                    struct.unpack(f">{nbytes // self.cfg.corr_word}l", spec)
-                )
-                for k, v in spec.items()
-            }
-        return spec
+        return self._read_spec("cross", ij, unpack)
 
     def read_data(self, pairs=None, unpack=False):
         """
         Read even/odd spectra for correlations specified in pairs.
+
+        Parameters
+        ----------
+        pairs : str, list of str or None
+            List of pairs to read. If None, reads all pairs. If a string,
+            reads the single pair specified.
+        unpack : bool
+            Whether to unpack the data into numpy arrays. Default is False,
+            which returns raw bytes.
+
+        Returns
+        -------
+        data : dict
+            Dictionary with keys as correlation identifiers and values as
+            the corresponding spectra. If unpack is True, values are numpy
+            arrays of integers.
+
         """
         data = {}
         if pairs is None:
@@ -499,8 +567,19 @@ class EigsepFpga:
         return data
 
     def update_redis(self, data, cnt):
-        """Update redis database with data from first half ("even")
-        integrations."""
+        """
+        Update redis database with data from first half ("even")
+        integrations.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary with keys as correlation identifiers and values as
+            the corresponding spectra.
+        cnt : int
+            The current integration count.
+
+        """
         for p, d in data.items():
             if len(p) == 1:
                 d = d[: self.cfg.corr_word * self.cfg.nchan]
