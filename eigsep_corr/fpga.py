@@ -31,7 +31,7 @@ from eigsep_observing.config import default_corr_config
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync
 
 
-def add_args(parser):
+def add_args(parser, eig_observing=False):
     """
     Add command line arguments to the parser.
 
@@ -39,6 +39,10 @@ def add_args(parser):
     ----------
     parser : argparse.ArgumentParser
         The argument parser to add arguments to.
+    eig_observing : bool
+        If True, arguments are for the new eigsep_observing code.
+        This removes the -r flag because it is impossible to run
+        eigsep_observing without redis.
 
     """
     parser.add_argument(
@@ -90,13 +94,6 @@ def add_args(parser):
         help="Synchronize the FPGA",
     )
     parser.add_argument(
-        "-r",
-        dest="update_redis",
-        action="store_true",
-        default=False,
-        help="Update redis",
-    )
-    parser.add_argument(
         "-w",
         dest="write_files",
         action="store_true",
@@ -107,7 +104,7 @@ def add_args(parser):
         "--ntimes",
         dest="ntimes",
         type=int,
-        default=io.DEFAULT_NTIMES,
+        default=default_corr_config.ntimes,
         help="Number of integrations to write to each file",
     )
     parser.add_argument(
@@ -116,6 +113,15 @@ def add_args(parser):
         default=default_corr_config.save_dir,
         help="Directory to save files",
     )
+
+    if not eig_observing:
+        parser.add_argument(
+            "-r",
+            dest="update_redis",
+            action="store_true",
+            default=False,
+            help="Update redis",
+        )
 
 
 class EigsepFpga:
