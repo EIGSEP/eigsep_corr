@@ -621,7 +621,7 @@ class EigsepFpga:
             "updated_date", datetime.datetime.now().isoformat()
         )
 
-    def _read_integrations(self, pairs, timeout=10, n_ints=None):
+    def _read_integrations(self, pairs, timeout=10):
         """
         Read integrated correlations from the SNAP board.
 
@@ -631,16 +631,10 @@ class EigsepFpga:
             List of pairs to read.
         timeout : float
             Number of seconds to wait for a new integration before timing out.
-        n_ints : int
-            Number of integrations to read. Default is None, which reads
-            indefinitely.
 
         """
         cnt = self.fpga.read_int("corr_acc_cnt")
         t = time.time()
-
-        if n_ints is not None:
-            first_cnt = cnt
 
         try:
             while time.time() < t + timeout and not self.stop_event.is_set():
@@ -662,11 +656,6 @@ class EigsepFpga:
                     )
                 self.queue.put({"data": data, "cnt": cnt})
                 t = time.time()
-                if n_ints is not None and cnt >= first_cnt + n_ints:
-                    self.logger.info(
-                        f"Read {n_ints} integrations, stopping read thread."
-                    )
-                    break
         finally:
             self.end_observing()
 
@@ -679,7 +668,6 @@ class EigsepFpga:
         self,
         pairs=None,
         timeout=10,
-        n_ints=None,
         update_redis=True,
         write_files=True,
     ):
@@ -713,7 +701,7 @@ class EigsepFpga:
         thd = Thread(
             target=self._read_integrations,
             args=(pairs),
-            kwargs={"timeout": timeout, "n_ints": n_ints},
+            kwargs={"timeout": timeout},
         )
         thd.start()
 
@@ -738,19 +726,21 @@ class EigsepFpga:
                 if self.stop_event.is_set():
                     self.logger.info("End of queue, processing finished.")
                     break
-                else:
-                    continue
+                continue
             data = d["data"]
             cnt = d["cnt"]
             if update_redis:
                 self.update_redis(data, cnt)
             if write_files:
-                filename = self.file.add_data(data, cnt)
+                # unpack data from bytes for writing to file
+                unpacked_data = self.unpack_data(data)
+                filename = self.file.add_data(unpacked_data)
                 if filename is not None:
                     self.logger.info(f"Wrote file {filename}")
-        if self.file is not None and len(self.file) > 0:
-            self.logger.info("Writing short final file.")
-            self.file.corr_write()
+        if self.file is not None:
+            if len(self.file) > 0:
+                self.logger.info("Writing short final file.")
+                self.file.corr_write()
 
         thd.join()
         self.logger.info("Done observing.")
