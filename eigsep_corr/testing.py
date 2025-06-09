@@ -4,7 +4,7 @@ import redis
 from math import floor
 
 from .fpga import EigsepFpga
-from .config import dummy_corr_config
+from eigsep_observing.config import dummy_corr_config
 
 
 class DummyBlock:
