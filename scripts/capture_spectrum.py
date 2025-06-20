@@ -6,7 +6,8 @@ parser = ArgumentParser()
 parser.add_argument("-fname", help="filename")
 args = parser.parse_args()
 
-REDIS_HOST = "10.10.10.10"
+# REDIS_HOST = "10.10.10.10"
+REDIS_HOST = "192.168.10.83"
 REDIS_PORT = 6379
 PAIRS = ["0", "1", "2", "3", "4", "5", "02", "24", "04", "13", "35", "15"]
 
