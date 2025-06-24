@@ -66,7 +66,10 @@ class DummyAdcAdc:
 
 class DummyAdc(DummyBlock):
 
-    def init(self, sample_rate=500, ref=None):
+    def __init__(self, fpga, num_chans=2, resolution=8, ref=None):
+        super().__init__(fpga)
+
+    def init(self, sample_rate=500):
         self.adc = DummyAdcAdc()
 
     def alignLineClock(self):
