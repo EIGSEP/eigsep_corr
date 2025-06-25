@@ -10,11 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class DummyBlock:
-    def __init__(self, fpga, attrs=[]):
+    def __init__(self, fpga):
         self.fpga = fpga
-        for attr in attrs:
-            self.fpga.regs[attr] = None
-        self._attributes = {}
 
     def init(self, *args, **kwargs):
         pass
@@ -33,16 +30,17 @@ class DummyBlock:
 
 
 class DummyFpga(DummyBlock):
-    def __init__(self, regs, **kwargs):
+    def __init__(self, **kwargs):
         self.sync_time = None
         self.cnt_period = kwargs.pop("cnt_period", 2**28 / (500 * 1e6))
-        self.regs = {r: None for r in regs}
+        self.regs = {}
         self.regs["version_version"] = 0x20003
 
     def upload_to_ram_and_program(self, fpg_file, force=False):
         pass
 
     def write_int(self, reg, val):
+        logger.debug(f"Writing {val} to {reg}")
         self.regs[reg] = val
 
     def read_int(self, reg):
@@ -141,7 +139,6 @@ class DummyEigsepFpga(EigsepFpga):
         sample_rate = self.cfg["sample_rate"]
         cnt_period = corr_acc_len / (sample_rate * 1e6)
         self.fpga = DummyFpga(
-            [],
             snap_ip=self.cfg["snap_ip"],
             transport=None,
             cnt_period=cnt_period,
@@ -177,7 +174,7 @@ class DummyEigsepFpga(EigsepFpga):
         attenuation = self.cfg["pam_atten"]
         self.pams = []
         for p, (att_e, att_n) in attenuation.items():
-            pam = DummyPam(self.fpga, f"i2c_ant{p}")
+            pam = DummyPam(self.fpga)
             pam.initialize()
             self.logger.info(
                 f"Setting pam{p} attenuation to ({att_e}, {att_n})"
