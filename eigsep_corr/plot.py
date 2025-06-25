@@ -96,7 +96,7 @@ def plot_live(
                 cnt = redis.get("ACC_CNT")
                 print(cnt)
                 ymax_mag = np.maximum(ymax_mag, data.max())
-                #axs[0].set_ylim(1e1, ymax_mag)
+                # axs[0].set_ylim(1e1, ymax_mag)
                 if len(p) == 1:  # auto
                     mag_lines[p].set_ydata(data)
                 else:  # cross

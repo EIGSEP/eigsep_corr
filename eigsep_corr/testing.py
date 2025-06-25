@@ -1,5 +1,4 @@
 import time
-import datetime
 import logging
 import redis
 from math import floor
@@ -38,7 +37,7 @@ class DummyFpga(DummyBlock):
         self.sync_time = None
         self.cnt_period = CORR_ACC_LEN / (SAMPLE_RATE * 1e6)
         self.regs = {r: None for r in regs}
-        self.regs['version_version'] = 0x20003
+        self.regs["version_version"] = 0x20003
 
     def upload_to_ram_and_program(self, fpg_file, force=False):
         pass
@@ -182,7 +181,7 @@ class DummyEigsepFpga(EigsepFpga):
         self.queue = None
         self.event = None
 
-    def initialize_pams(self, attenuation=(8,8)):
+    def initialize_pams(self, attenuation=(8, 8)):
 
         self.pams = []
         for p, (att_e, att_n) in attenuation.items():
