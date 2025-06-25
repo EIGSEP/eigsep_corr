@@ -4,17 +4,16 @@ import logging
 from eigsep_corr.fpga import EigsepFpga, FPG_FILE
 
 SNAP_IP = "10.10.10.13"  # C00091
-#SNAP_IP = "10.10.10.18"  # C00069
+# SNAP_IP = "10.10.10.18"  # C00069
 SAMPLE_RATE = 500  # MHz
 GAIN = 4  # ADC gain
 CORR_ACC_LEN = 2**28
 CORR_SCALAR = 2**9
 POL_DELAY = {"01": 0, "23": 0, "45": 0}
-FFT_SHIFT = 0x00FF 
+FFT_SHIFT = 0x00FF
 USE_REF = False  # use synth to generate adc clock from 10 MHz
 USE_NOISE = False  # use digital noise instead of ADC data
 PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}  # order is EAST, NORTH
-N_FEMS = 0  # number of FEMs to initialize (0-3)
 SAVE_DIR = "/media/eigsep/T7/data"
 LOG_LEVEL = logging.INFO
 LOG_LEVEL = logging.DEBUG
@@ -103,11 +102,6 @@ args = parser.parse_args()
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=LOG_LEVEL)
 
-if USE_REF:
-    ref = 10
-else:
-    ref = None
-
 if args.dummy_mode:
     logger.warning("Running in DUMMY mode")
     from eigsep_corr.testing import DummyEigsepFpga
@@ -126,8 +120,10 @@ else:
         program = False
         force_program = False
     fpga = EigsepFpga(
-        cfg=cfg,
+        snap_ip=SNAP_IP,
+        fpg_file=args.fpg_file,
         program=program,
+        use_ref=USE_REF,
         logger=logger,
         force_program=force_program,
     )
