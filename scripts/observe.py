@@ -2,6 +2,7 @@ import argparse
 import logging
 
 from eigsep_corr.fpga import EigsepFpga, FPG_FILE
+from eigsep_corr.testing import DummyEigsepFpga
 
 SNAP_IP = "10.10.10.13"  # C00091
 # SNAP_IP = "10.10.10.18"  # C00069
@@ -101,32 +102,23 @@ args = parser.parse_args()
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=LOG_LEVEL)
 
+force_program = args.force_program
+program = args.program or force_program
+fpga_kwargs = {
+    "snap_ip": SNAP_IP,
+    "fpg_file": args.fpg_file,
+    "program": program,
+    "use_ref": USE_REF,
+    "logger": logger,
+    "force_program": force_program,
+}
+
 if args.dummy_mode:
     logger.warning("Running in DUMMY mode")
-    from eigsep_corr.testing import DummyEigsepFpga
-
-    fpga = DummyEigsepFpga(logger=logger)
+    fpga = DummyEigsepFpga(**fpga_kwargs)
 else:
-    from eigsep_corr.fpga import EigsepFpga
-
-    if args.force_program:
-        program = True
-        force_program = True
-    elif args.program:
-        program = True
-        force_program = False
-    else:
-        program = False
-        force_program = False
-    fpga = EigsepFpga(
-        snap_ip=SNAP_IP,
-        fpg_file=args.fpg_file,
-        program=program,
-        use_ref=USE_REF,
-        logger=logger,
-        force_program=force_program,
-    )
-
+    logger.info(f"Connecting to Eigsep correlator at {SNAP_IP}")
+    fpga = EigsepFpga(**fpga_kwargs)
 
 if args.initialize_adc:
     fpga.initialize_adc(sample_rate=SAMPLE_RATE, gain=GAIN)
