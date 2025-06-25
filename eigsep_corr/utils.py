@@ -1,4 +1,4 @@
-"""Utility functions for EIGSEP"""
+"""Utility functions for EIGSEP Correlator"""
 
 import numpy as np
 

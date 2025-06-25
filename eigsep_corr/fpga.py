@@ -14,8 +14,6 @@ CORR_SCALAR (18_8).
 import datetime
 import logging
 import redis
-import struct
-import os
 import time
 from threading import Event, Thread
 from queue import Queue
@@ -124,12 +122,6 @@ class EigsepFpga:
         self.queue = None
         self.event = None
 
-        # accelerometer data from FEM on platform
-        if read_accelerometer:
-            self.platform_redis = redis.Redis(host="10.10.10.12", port=6379)
-        else:
-            self.platform_redis = None
-
     @property
     def version(self):
         val = self.fpga.read_uint("version_version")
@@ -142,6 +134,11 @@ class EigsepFpga:
 
     @property
     def metadata(self):
+        """
+        This attribute only includes metadata that is not changing during
+        observation. 
+
+        """
         m = {
             "nchan": NCHAN,
             "fpg_file": self.fpg_file,
@@ -162,15 +159,6 @@ class EigsepFpga:
             }
         if self.is_synchronized:
             m["sync_time"] = self.sync_time
-        if self.platform_redis is not None:
-            theta = str(self.platform_redis.get("theta"))
-            phi = str(self.platform_redis.get("phi"))
-            print(theta, phi)
-            accel = {
-                "theta": theta,
-                "phi": phi,
-            }
-            m["accelerometer"] = accel
         return m
 
     def _run_adc_test(self, test, n_tries):
@@ -241,7 +229,6 @@ class EigsepFpga:
         corr_scalar=CORR_SCALAR,
         pol_delay=DEFAULT_POL_DELAY,
         pam_atten=DEFAULT_PAM_ATTEN,
-        n_fems=N_FEMS,
         verify=False,
     ):
         """
@@ -249,10 +236,15 @@ class EigsepFpga:
 
         Parameters
         ----------
+        fft_shift : int
         corr_acc_len : int (power of 2)
             The accumulation length.  Default CORR_ACC_LEN.
         corr_scalar : int (power of 2)
-            Scalar that is multiplied to each correlation. Default CORR_SCALAR.
+            Scalar that is multiplied to each correlation.
+        pol_delay : dict
+            Keys are "01", "23", and "45". Values (int) are the delay.
+        pam_atten : dict
+            Keys are antenna numbers, values are tuples of (east, north).
 
         """
         for blk in self.blocks:
@@ -260,10 +252,8 @@ class EigsepFpga:
         try:
             # initialize pams
             self.initialize_pams(attenuation=pam_atten)
-            # initialize fems
-            self.initialize_fems(N=n_fems)
         except OSError:
-            self.logger.warn("Couldn't initialize PAMs and FEMs")
+            self.logger.warn("Couldn't initialize PAMs.")
             pass
         self.logger.info(f"Setting FFT_SHIFT: {fft_shift}")
         self.pfb.set_fft_shift(fft_shift)
@@ -275,6 +265,23 @@ class EigsepFpga:
             assert self.fpga.read_uint("corr_acc_len") == corr_acc_len
             assert self.fpga.read_uint("corr_scalar") == corr_scalar
         self.set_pol_delay(delay=pol_delay, verify=verify)
+
+    def set_input(self):
+        """
+        Set the input to either noise or ADC based on the configuration.
+        This method is called after initializing the ADC and FPGA.
+        """
+        self.noise.set_seed(stream=None, seed=0)
+        if self.cfg.use_noise:
+            self.logger.warning("Switching to noise input.")
+            self.inp.use_noise(stream=None)
+            self.sync.arm_noise()
+            for i in range(3):
+                self.sync.sw_sync()
+            self.logger.info("Synchronized noise")
+        else:
+            self.logger.info("Switching to ADC input.")
+            self.inp.use_adc(stream=None)
 
     def set_pol_delay(self, delay, verify=False):
         """
@@ -319,23 +326,6 @@ class EigsepFpga:
         self.blocks.extend(self.pams)
         self.pams_initialized = True
 
-    def initialize_fems(self, N=N_FEMS):
-        """
-        Initialize the FEMs.
-
-        Parameters
-        ----------
-        N : int
-           Number of FEMs to initialize.
-
-        """
-        self.logger.info(f"Attaching {N} FEMs")
-        self.fems = [Fem(self.fpga, f"i2c_ant{i}") for i in range(N)]
-        for fem in self.fems:
-            fem.initialize()
-        self.blocks.extend(self.fems)
-        self.fems_initialized = True
-
     def synchronize(self, delay=0, update_redis=True):
         self.sync.set_delay(delay)
         self.sync.arm_sync()
@@ -352,6 +342,72 @@ class EigsepFpga:
             )
         self.is_synchronized = True
 
+    def unpack_data(self, data):
+        """
+        Unpack raw correlation data into numpy arrays.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary with keys as the input pairs and values as raw
+            correlation data in bytes.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys as the input pairs and values as numpy arrays
+            of unpacked correlation data.
+
+        """
+        return {
+            k: np.frombuffer(v, dtype=self.data_type) for k, v in data.items()
+        }
+
+    def _read_spec(self, spec_type, i, unpack):
+        """
+        Read a single spectrum from the FPGA. This is a helper method for
+        read_auto and read_cross and should not be called directly.
+
+        Parameters
+        ----------
+        spec_type : str
+            The type of spectrum to read, either 'auto' or 'cross'.
+        i : str, list of str, or None
+            The identifier of the spectrum to read, e.g. '0', '02'. If None,
+            reads all spectra of the specified type.
+        unpack : bool
+            Whether to unpack the data into numpy arrays. Default is False,
+            which returns raw bytes.
+
+        Returns
+        -------
+        spec : bytes or numpy array
+            The spectrum data. If unpack is True, returns a numpy array of
+            integers, otherwise returns raw bytes.
+
+        """
+        if i is None:
+            if spec_type == "auto":
+                i = self.autos
+            else:
+                i = self.crosses
+        elif isinstance(i, str):
+            i = [i]
+        if len(i) == 0:
+            return {}
+        # total number of bytes to read, factor of 2 is for odd/even
+        nbytes = self.cfg.corr_word * 2 * self.cfg.nchan
+        if spec_type == "cross":
+            nbytes *= 2  # real/imag for cross correlations
+        spec = {}
+        for k in i:
+            key = f"corr_{spec_type}_{k}_dout"
+            data = self.fpga.read(key, nbytes)
+            spec[k] = data
+        if unpack:
+            spec = self.unpack_data(spec)
+        return spec
+
     def read_auto(self, i=None, unpack=False):
         """
         Read the i'th (counting from 0) autocorrelation spectrum.
@@ -361,46 +417,75 @@ class EigsepFpga:
         i : str
             Which autocorrelation to read. Default is None, which reads all
             autocorrelations.
+        unpack : bool
+            Whether to unpack the data into numpy arrays. Default is False,
+            which returns raw bytes.
+
+        Returns
+        -------
+        spec : dict
+            Dictionary with keys as autocorrelation identifiers and values as
+            the corresponding spectra. If unpack is True, values are numpy
+            arrays of integers.
+
+        Notes
+        -----
+        The first half of the data is the 'even' integration, and the second
+        half is the 'odd' integration.
+
         """
-        if i is None:
-            i = self.autos
-        elif type(i) is str:
-            i = [i]
-        nbytes = CORR_WORD * 2 * NCHAN  # odd/even
-        spec = {k: self.fpga.read(f"corr_auto_{k}_dout", nbytes) for k in i}
-        if unpack:
-            spec = {
-                k: np.array(struct.unpack(f">{nbytes // CORR_WORD}l", v))
-                for k, v in spec.items()
-            }
-        return spec
+        return self._read_spec("auto", i, unpack)
 
     def read_cross(self, ij=None, unpack=False):
         """
-        Read the cross correlation spectrum between inputs i and j.
+        Read the cross-correlation spectrum between inputs i and j.
 
         Parameters
         ----------
         ij : str
-            Which correlation to read, e.g. "02". Assuming N<M. Default is
-            None, which reads all cross correlations.
+            Which cross-correlation to read. Default is None, which reads all
+            cross-correlations.
+        unpack : bool
+            Whether to unpack the data into numpy arrays. Default is False,
+            which returns raw bytes.
+
+        Returns
+        -------
+        spec : dict
+            Dictionary with keys as autocorrelation identifiers and values as
+            the corresponding spectra. If unpack is True, values are numpy
+            arrays of integers.
+
+        Notes
+        -----
+        The first half of the data is the 'even' integration, and the second
+        half is the 'odd' integration. Real and imaginary parts are
+        interleaved, with every other sample being the real part and the
+        following sample being the imaginary part.
+
         """
-        if ij is None:
-            ij = self.crosses
-        elif type(ij) is str:
-            ij = [ij]
-        nbytes = CORR_WORD * 2 * 2 * NCHAN  # odd/even, real/imag
-        spec = {k: self.fpga.read(f"corr_cross_{k}_dout", nbytes) for k in ij}
-        if unpack:
-            spec = {
-                k: np.array(struct.unpack(f">{nbytes // CORR_WORD}l", spec))
-                for k, v in spec.items()
-            }
-        return spec
+        return self._read_spec("cross", ij, unpack)
 
     def read_data(self, pairs=None, unpack=False):
         """
         Read even/odd spectra for correlations specified in pairs.
+
+        Parameters
+        ----------
+        pairs : str, list of str or None
+            List of pairs to read. If None, reads all pairs. If a string,
+            reads the single pair specified.
+        unpack : bool
+            Whether to unpack the data into numpy arrays. Default is False,
+            which returns raw bytes.
+
+        Returns
+        -------
+        data : dict
+            Dictionary with keys as correlation identifiers and values as
+            the corresponding spectra. If unpack is True, values are numpy
+            arrays of integers.
+
         """
         data = {}
         if pairs is None:
@@ -414,8 +499,19 @@ class EigsepFpga:
         return data
 
     def update_redis(self, data, cnt):
-        """Update redis database with data from first half ("even")
-        integrations."""
+        """
+        Update redis database with data from first half ("even")
+        integrations.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary with keys as correlation identifiers and values as
+            the corresponding spectra.
+        cnt : int
+            The current integration count.
+
+        """
         for p, d in data.items():
             if len(p) == 1:
                 d = d[: CORR_WORD * NCHAN]
@@ -427,6 +523,17 @@ class EigsepFpga:
         self.redis.set("updated_date", datetime.datetime.now().isoformat())
 
     def _read_integrations(self, pairs, timeout=10):
+        """
+        Read integrated correlations from the SNAP board.
+
+        Parameters
+        ----------
+        pairs : list
+            List of pairs to read.
+        timeout : float
+            Number of seconds to wait for a new integration before timing out.
+
+        """
         cnt = self.fpga.read_int("corr_acc_cnt")
         t = time.time()
 
@@ -466,7 +573,6 @@ class EigsepFpga:
         write_files=True,
         ntimes=io.DEFAULT_NTIMES,
         header=io.DEFAULT_HEADER,
-        read_accelerometer=False,
     ):
         """
         Observe continuously.
@@ -488,15 +594,15 @@ class EigsepFpga:
             io.DEFAULT_NTIMES (60).
         header : dict
             Header to write to each file. Default is io.DEFAULT_HEADER.
-        read_accelerometer : bool
-            Grab accelerometer data from redis and write to file. Default is
-            False.
-
         """
         self.queue = Queue(maxsize=0)  # XXX infinite size
         self.event = Event()
 
-        thd = Thread(target=self._read_integrations, args=(pairs, timeout))
+        thd = Thread(
+            target=self._read_integrations,
+            args=(pairs),
+            kwargs={"timeout": timeout},
+        )
         thd.start()
 
         if write_files:
@@ -521,9 +627,10 @@ class EigsepFpga:
                 filename = self.file.add_data(data, cnt)
                 if filename is not None:
                     self.logger.info(f"Wrote file {filename}")
-        if self.file is not None and len(self.file) > 0:
-            self.logger.info("Writing short final file.")
-            self.file.corr_write()
+        if self.file is not None:
+            if len(self.file) > 0:
+                self.logger.info("Writing short final file.")
+                self.file.corr_write()
 
         thd.join()
         self.logger.info("Done observing.")

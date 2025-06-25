@@ -17,7 +17,7 @@ PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}  # order is EAST, NORTH
 N_FEMS = 0  # number of FEMs to initialize (0-3)
 SAVE_DIR = "/media/eigsep/T7/data"
 LOG_LEVEL = logging.INFO
-READ_ACCEL = False  # box fem accelerometer
+LOG_LEVEL = logging.DEBUG
 
 parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
@@ -110,27 +110,27 @@ else:
 
 if args.dummy_mode:
     logger.warning("Running in DUMMY mode")
-    from eigsep_corr.testing import DummyEigsepFpga as EigsepFpga
+    from eigsep_corr.testing import DummyEigsepFpga
 
-if args.force_program:
-    program = True
-    force_program = True
-elif args.program:
-    program = True
-    force_program = False
+    fpga = DummyEigsepFpga(logger=logger)
 else:
-    program = False
-    force_program = False
+    from eigsep_corr.fpga import EigsepFpga
 
-fpga = EigsepFpga(
-    SNAP_IP,
-    fpg_file=args.fpg_file,
-    program=program,
-    ref=ref,
-    logger=logger,
-    force_program=force_program,
-    read_accelerometer=READ_ACCEL,
-)
+    if args.force_program:
+        program = True
+        force_program = True
+    elif args.program:
+        program = True
+        force_program = False
+    else:
+        program = False
+        force_program = False
+    fpga = EigsepFpga(
+        cfg=cfg,
+        program=program,
+        logger=logger,
+        force_program=force_program,
+    )
 
 
 if args.initialize_adc:
@@ -143,23 +143,12 @@ if args.initialize_fpga:
         corr_scalar=CORR_SCALAR,
         pol_delay=POL_DELAY,
         pam_atten=PAM_ATTEN,
-        n_fems=N_FEMS,
     )
 
 fpga.check_version()
 
 # set input
-fpga.noise.set_seed(stream=None, seed=0)
-if USE_NOISE:
-    fpga.logger.warning("Switching to noise input")
-    fpga.inp.use_noise(stream=None)
-    fpga.sync.arm_noise()
-    for i in range(3):
-        fpga.sync.sw_sync()
-    fpga.logger.info("Synchronized noise.")
-else:
-    fpga.logger.info("Switching to ADC input")
-    fpga.inp.use_adc(stream=None)
+fpga.set_input(use_noise=USE_NOISE)
 
 # synchronize
 if args.sync:
