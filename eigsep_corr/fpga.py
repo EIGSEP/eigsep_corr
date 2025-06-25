@@ -61,6 +61,12 @@ class EigsepFpga:
         self.logger = logger
         self.logger.debug("Initializing EigsepFpga")
         self.cfg = cfg
+        self.autos = ["0", "1", "2", "3", "4", "5"]
+        self.crosses = ["02", "13", "24", "35", "04", "15"]
+
+        # redis instance
+        rcfg = self.cfg["redis"]
+        self.redis = self._create_redis(rcfg["host"], rcfg["port"])
 
         fpg_file = Path(self.cfg["fpg_file"])
         if not fpg_file.is_absolute():
@@ -90,52 +96,76 @@ class EigsepFpga:
         self.pfb = Pfb(self.fpga, "pfb")
         self.blocks = [self.sync, self.noise, self.inp, self.pfb]
 
-        self.autos = ["0", "1", "2", "3", "4", "5"]
-        self.crosses = ["02", "13", "24", "35", "04", "15"]
-
-        self.redis = redis.Redis("localhost", port=6379)
-
         self.adc_initialized = False
         self.pams_initialized = False
         self.is_synchronized = False
+
+    @staticmethod
+    def _create_redis(host, port):
+        """
+        Create a Redis instance.
+
+        Parameters
+        ----------
+        host : str
+            Redis server hostname.
+        port : int
+            Redis server port.
+
+        Returns
+        -------
+        redis.Redis
+            Redis instance connected to the specified host and port.
+
+        """
+        return redis.Redis(host=host, port=port)
 
     @property
     def version(self):
         val = self.fpga.read_uint("version_version")
         major = val >> 16
         minor = val & 0xFFFF
-        return (major, minor)
-
-    def check_version(self):
-        expected_version = tuple(self.cfg["fpg_version"])
-        if not self.version == expected_version:
-            raise RuntimeError(
-                f"FPGA version {self.version} does not match "
-                f"expected version {expected_version}."
-            )
+        return [major, minor]
 
     @property
     def header(self):
         """
-        This attribute only includes metadata that is not changing during
-        observation.
+        Generate a file header. This is a copy of the configuration
+        dictionary, but replaced with the actual values from the
+        SNAP when available.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys as configuration parameters and values
+            as the actual values from the SNAP board.
 
         """
         m = {
-            "nchan": self.cfg["nchan"],
+            "snap_ip": self.cfg["snap_ip"],
             "fpg_file": str(self.fpg_file),
             "fpg_version": self.version,
+            "nchan": self.cfg["nchan"],
+            "use_ref": self.cfg["use_ref"],
+            "use_noise": self.cfg["use_noise"],
+            "fft_shift": self.pfb.get_fft_shift(),
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
-            "pol01_delay": self.fpga.read_uint("pfb_pol01_delay"),
-            "pol23_delay": self.fpga.read_uint("pfb_pol23_delay"),
-            "pol45_delay": self.fpga.read_uint("pfb_pol45_delay"),
-            "fft_shift": self.pfb.get_fft_shift(),
-            "data_type": self.cfg["dtype"],
+            "corr_word": self.cfg["corr_word"],
+            "acc_bins": self.cfg["acc_bins"],
+            "dtype": self.cfg["dtype"],
+            "pol_delay": {
+                "01": self.fpga.read_uint("pfb_pol01_delay"),
+                "23": self.fpga.read_uint("pfb_pol23_delay"),
+                "45": self.fpga.read_uint("pfb_pol45_delay"),
+            },
+            "ntimes": self.cfg["ntimes"],
+            "save_dir": self.cfg["save_dir"],
+            "redis": self.cfg["redis"],
         }
         if self.adc_initialized:
             m["sample_rate"] = self.adc.sample_rate
-            m["gain"] = self.adc.gain
+            m["adc_gain"] = self.adc.gain
         if self.pams_initialized:
             m["pam_atten"] = {
                 int(i): p.get_attenuation() for i, p in enumerate(self.pams)
@@ -143,6 +173,34 @@ class EigsepFpga:
         if self.is_synchronized:
             m["sync_time"] = self.sync_time
         return m
+
+    def validate_config(self):
+        """
+        Ensure that the configuration in `self.cfg` matches the
+        actual hardware setup, from `self.header`.
+
+        Raises
+        ------
+        RuntimeError
+            If the configuration does not match the hardware setup.
+        """
+        fails = []
+        for key, value in self.header.items():
+            cfg_value = self.cfg.get(key)
+            if key == "sync_time":
+                continue  # sync_time is not in cfg
+            if key in ("pam_atten", "pol_delay"):
+                if set(value.keys()) != set(cfg_value.keys()):
+                    fails.append(key)
+                elif any(value[k] != cfg_value[k] for k in value.keys()):
+                    fails.append(key)
+            elif value != cfg_value:
+                fails.append(key)
+        if len(fails) > 0:
+            raise RuntimeError(
+                "Configuration does not match hardware setup: "
+                + ", ".join(fails)
+            )
 
     def _run_adc_test(self, test, n_tries):
         """
@@ -566,6 +624,8 @@ class EigsepFpga:
         self.queue = Queue(maxsize=0)  # XXX infinite size
         self.event = Event()
         ntimes = self.cfg.get("ntimes", io.DEFAULT_NTIMES)
+        if pairs is None:
+            pairs = self.autos + self.crosses
 
         self.logger.debug("Start reading integrations.")
         thd = Thread(

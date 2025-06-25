@@ -101,7 +101,8 @@ if args.initialize_fpga:
     logger.debug("Initializing FPGA")
     fpga.initialize_fpga()
 
-fpga.check_version()
+# validate configuration
+fpga.validate_config()
 
 # set input
 fpga.set_input()
