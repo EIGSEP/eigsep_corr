@@ -164,11 +164,12 @@ class EigsepFpga:
             "redis": self.cfg["redis"],
         }
         if self.adc_initialized:
-            m["sample_rate"] = self.adc.sample_rate
+            m["sample_rate"] = self.adc.sample_rate / 1e6  # in MHz
             m["adc_gain"] = self.adc.gain
         if self.pams_initialized:
             m["pam_atten"] = {
-                int(i): p.get_attenuation() for i, p in enumerate(self.pams)
+                int(i): list(p.get_attenuation())
+                for i, p in enumerate(self.pams)
             }
         if self.is_synchronized:
             m["sync_time"] = self.sync_time
