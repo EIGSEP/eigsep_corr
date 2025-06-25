@@ -393,7 +393,7 @@ class EigsepFpga:
         spec = {k: self.fpga.read(f"corr_cross_{k}_dout", nbytes) for k in ij}
         if unpack:
             spec = {
-                k: np.array(struct.unpack(f">{nbytes // CORR_WORD}l", spec))
+                k: np.array(struct.unpack(f">{nbytes // CORR_WORD}l", v))
                 for k, v in spec.items()
             }
         return spec
