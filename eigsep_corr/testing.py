@@ -5,8 +5,6 @@ from math import floor
 
 from .fpga import EigsepFpga
 from .fpga import SNAP_IP, FPG_FILE
-from .fpga import NCHAN, CORR_ACC_LEN, SAMPLE_RATE
-from .fpga import REDIS_HOST, REDIS_PORT
 
 
 class DummyBlock:
@@ -35,7 +33,7 @@ class DummyBlock:
 class DummyFpga(DummyBlock):
     def __init__(self, regs, **kwargs):
         self.sync_time = None
-        self.cnt_period = CORR_ACC_LEN / (SAMPLE_RATE * 1e6)
+        self.cnt_period = kwargs.pop("cnt_period", 2**28 / (500 * 1e6))
         self.regs = {r: None for r in regs}
         self.regs["version_version"] = 0x20003
 
@@ -137,13 +135,10 @@ class DummyEigsepFpga(EigsepFpga):
         snap_ip=SNAP_IP,
         fpg_file=FPG_FILE,
         program=False,
-        ref=None,
+        use_ref=False,
         transport=None,
         logger=None,
-        sample_rate=SAMPLE_RATE,
-        nchan=NCHAN,
-        acc_len=CORR_ACC_LEN,
-        **kwargs,
+        force_program=False,
     ):
         if logger is None:
             logger = logging.getLogger(__name__)
@@ -151,11 +146,19 @@ class DummyEigsepFpga(EigsepFpga):
         self.logger = logger
 
         self.fpg_file = fpg_file
-        self.fpga = DummyFpga([], snap_ip=snap_ip, transport=transport)
+        cnt_period = self.defaults["corr_acc_len"] / (
+            self.defaults["sample_rate"] * 1e6
+        )
+        self.fpga = DummyFpga(
+            [], snap_ip=snap_ip, transport=transport, cnt_period=cnt_period
+        )
         if program:
-            self.fpga.upload_to_ram_and_program(
-                self.cfg.fpg_file, force=force_program
-            )
+            self.fpga.upload_to_ram_and_program(fpg_file, force=force_program)
+
+        if use_ref:
+            ref = 10
+        else:
+            ref = None
 
         self.adc = DummyAdc(self.fpga, ref=ref)
         self.sync = DummySync(self.fpga)
@@ -167,15 +170,15 @@ class DummyEigsepFpga(EigsepFpga):
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
-        self.redis = redis.Redis(REDIS_HOST, port=REDIS_PORT)
+        self.redis = redis.Redis(self.redis_host, port=self.redis_port)
 
         self.adc_initialized = False
         self.pams_initialized = False
         self.is_synchronized = False
 
-        self.sample_rate = sample_rate
-        self.nchan = nchan
-        self.acc_len = acc_len
+        self.sample_rate = self.defaults["sample_rate"]
+        self.nchan = self.defaults["nchan"]
+        self.acc_len = self.defaults["corr_acc_len"]
 
         self.file = None
         self.queue = None
