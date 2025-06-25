@@ -152,7 +152,7 @@ class EigsepFpga:
         assert self.version == expected_version
 
     @property
-    def metadata(self):
+    def header(self):
         """
         This attribute only includes metadata that is not changing during
         observation.
@@ -168,6 +168,7 @@ class EigsepFpga:
             "pol23_delay": self.fpga.read_uint("pfb_pol23_delay"),
             "pol45_delay": self.fpga.read_uint("pfb_pol45_delay"),
             "fft_shift": self.pfb.get_fft_shift(),
+            "data_type": self.data_type,
         }
         if self.adc_initialized:
             m["sample_rate"] = self.adc.sample_rate
@@ -643,7 +644,7 @@ class EigsepFpga:
 
         if write_files:
             # update header
-            for k, v in self.metadata.items():
+            for k, v in self.header.items():
                 header[k] = v
             self.file = io.File(save_dir, ntimes=ntimes, header=header)
 
