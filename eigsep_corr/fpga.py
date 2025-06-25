@@ -23,6 +23,7 @@ import yaml
 
 import redis
 
+USE_CASPERFPGA = True
 try:
     import casperfpga
     from casperfpga.transport_tapcp import TapcpTransport
