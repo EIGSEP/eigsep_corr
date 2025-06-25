@@ -146,6 +146,32 @@ class DummyEigsepFpga(EigsepFpga):
             logger.setLevel(logging.DEBUG)
         self.logger = logger
 
+        # defaults
+        self.defaults = {
+            "sample_rate": 500,  # MHz
+            "fpg_version": (2, 3),  # major, minor
+            "adc_gain": 4,  # ADC gain
+            "fft_shift": 0x0055,  # FFT shift
+            "corr_acc_len": 2
+            ** 28,  # makes corr_acc_cnt increment by ~1 per second
+            "corr_scalar": 2
+            ** 9,  # 2**9 = 1, correlator uses 8 bits after binary point
+            "pam_attenuation": {
+                0: (8, 8),
+                1: (8, 8),
+                2: (8, 8),
+            },
+            "pol_delay": {
+                "01": 0,
+                "23": 0,
+                "45": 0,
+            },
+            "nchan": 1024,  # number of channels
+        }
+
+        self.corr_word = 4  # number of bytes per correlation word
+        self.data_type = ">i4"  # numpy data type for correlation data
+
         self.fpg_file = fpg_file
         cnt_period = self.defaults["corr_acc_len"] / (
             self.defaults["sample_rate"] * 1e6

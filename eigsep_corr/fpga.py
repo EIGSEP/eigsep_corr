@@ -39,33 +39,6 @@ FPG_FILE = Path(DATA_PATH) / "eigsep_fengine_1g_v2_3_2024-07-08_1858.fpg"
 
 class EigsepFpga:
 
-    # defaults
-    defaults = {
-        "sample_rate": 500,  # MHz
-        "fpg_version": (2, 3),  # major, minor
-        "adc_gain": 4,  # ADC gain
-        "fft_shift": 0x0055,  # FFT shift
-        "corr_acc_len": 2**28,  # makes corr_acc_cnt increment by ~1 per second
-        "corr_scalar": 2
-        ** 9,  # 2**9 = 1, correlator uses 8 bits after binary point
-        "pam_attenuation": {
-            0: (8, 8),
-            1: (8, 8),
-            2: (8, 8),
-        },
-        "pol_delay": {
-            "01": 0,
-            "23": 0,
-            "45": 0,
-        },
-        "nchan": 1024,  # number of channels
-    }
-
-    corr_word = 4  # number of bytes per correlation word
-    data_type = ">i4"  # numpy data type for correlation data
-    redis_host = "localhost"
-    redis_port = 6379
-
     def __init__(
         self,
         snap_ip=SNAP_IP,
@@ -104,6 +77,33 @@ class EigsepFpga:
 
         """
         self.logger = logger
+        # defaults
+        self.defaults = {
+            "sample_rate": 500,  # MHz
+            "fpg_version": (2, 3),  # major, minor
+            "adc_gain": 4,  # ADC gain
+            "fft_shift": 0x0055,  # FFT shift
+            "corr_acc_len": 2
+            ** 28,  # makes corr_acc_cnt increment by ~1 per second
+            "corr_scalar": 2
+            ** 9,  # 2**9 = 1, correlator uses 8 bits after binary point
+            "pam_attenuation": {
+                0: (8, 8),
+                1: (8, 8),
+                2: (8, 8),
+            },
+            "pol_delay": {
+                "01": 0,
+                "23": 0,
+                "45": 0,
+            },
+            "nchan": 1024,  # number of channels
+        }
+
+        self.corr_word = 4  # number of bytes per correlation word
+        self.data_type = ">i4"  # numpy data type for correlation data
+        redis_host = "localhost"
+        redis_port = 6379
 
         self.fpg_file = fpg_file
         self.fpga = casperfpga.CasperFpga(snap_ip, transport=transport)
@@ -129,7 +129,7 @@ class EigsepFpga:
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
-        self.redis = redis.Redis(self.redis_host, port=self.redis_port)
+        self.redis = redis.Redis(redis_host, port=redis_port)
 
         self.adc_initialized = False
         self.pams_initialized = False
