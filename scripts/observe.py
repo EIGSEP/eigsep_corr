@@ -1,22 +1,15 @@
 import argparse
 import logging
 
-from eigsep_corr.fpga import EigsepFpga, FPG_FILE
+LOG_LEVEL = logging.DEBUG
+logging.basicConfig(level=LOG_LEVEL)
+
+from eigsep_corr.fpga import EigsepFpga, load_config
 from eigsep_corr.testing import DummyEigsepFpga
 
-SNAP_IP = "10.10.10.13"  # C00091
-# SNAP_IP = "10.10.10.18"  # C00069
-SAMPLE_RATE = 500  # MHz
-GAIN = 4  # ADC gain
-CORR_ACC_LEN = 2**28
-CORR_SCALAR = 2**9
-POL_DELAY = {"01": 0, "23": 0, "45": 0}
-FFT_SHIFT = 0x00FF
-USE_REF = False  # use synth to generate adc clock from 10 MHz
-USE_NOISE = False  # use digital noise instead of ADC data
-PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}  # order is EAST, NORTH
-SAVE_DIR = "/media/eigsep/T7/data"
-LOG_LEVEL = logging.INFO
+logger = logging.getLogger(__name__)
+CONFIG_FILE = "config.yaml"  # relative to config directory
+CFG = load_config(CONFIG_FILE)
 
 parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
@@ -42,12 +35,6 @@ parser.add_argument(
     action="store_true",
     default=False,
     help="force program eigsep correlator even if fpg file is the same",
-)
-parser.add_argument(
-    "--fpg",
-    dest="fpg_file",
-    default=FPG_FILE,
-    help="FPG file for eigsep correlator",
 )
 parser.add_argument(
     "-a",
@@ -85,61 +72,38 @@ parser.add_argument(
     help="write data to file",
 )
 parser.add_argument(
-    "--ntimes",
-    dest="ntimes",
-    type=int,
-    default=60,
-    help="Number of integrations to write per file.",
-)
-parser.add_argument(
     "--save_dir",
     dest="save_dir",
-    default=SAVE_DIR,
+    default=CFG["save_dir"],
     help="Directory to save files.",
 )
 args = parser.parse_args()
 
-logger = logging.getLogger(__name__)
-if args.dummy_mode:
-    LOG_LEVEL = logging.DEBUG
-logger.setLevel(LOG_LEVEL)
-
-force_program = args.force_program
-program = args.program or force_program
-fpga_kwargs = {
-    "snap_ip": SNAP_IP,
-    "fpg_file": args.fpg_file,
-    "program": program,
-    "use_ref": USE_REF,
-    "logger": logger,
-    "force_program": force_program,
-}
+if args.force_program:
+    program = "force"
+else:
+    program = args.program
 
 if args.dummy_mode:
     logger.warning("Running in DUMMY mode")
-    fpga = DummyEigsepFpga(**fpga_kwargs)
+    fpga = DummyEigsepFpga(cfg=CFG, program=program)
 else:
-    logger.info(f"Connecting to Eigsep correlator at {SNAP_IP}")
-    fpga = EigsepFpga(**fpga_kwargs)
+    snap_ip = CFG["snap_ip"]
+    logger.info(f"Connecting to Eigsep correlator at {snap_ip}")
+    fpga = EigsepFpga(cfg=CFG, program=program)
 
 if args.initialize_adc:
     logger.debug("Initializing ADCs")
-    fpga.initialize_adc(sample_rate=SAMPLE_RATE, gain=GAIN)
+    fpga.initialize_adc()
 
 if args.initialize_fpga:
     logger.debug("Initializing FPGA")
-    fpga.initialize_fpga(
-        fft_shift=FFT_SHIFT,
-        corr_acc_len=CORR_ACC_LEN,
-        corr_scalar=CORR_SCALAR,
-        pol_delay=POL_DELAY,
-        pam_atten=PAM_ATTEN,
-    )
+    fpga.initialize_fpga()
 
 fpga.check_version()
 
 # set input
-fpga.set_input(use_noise=USE_NOISE)
+fpga.set_input()
 
 # synchronize
 if args.sync:
@@ -153,7 +117,6 @@ try:
         timeout=10,
         update_redis=args.update_redis,
         write_files=args.write_files,
-        ntimes=args.ntimes,
     )
 except KeyboardInterrupt:
     logger.info("Exiting.")

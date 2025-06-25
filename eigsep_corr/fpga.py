@@ -12,110 +12,101 @@ CORR_SCALAR (18_8).
 """
 
 import datetime
+from importlib import resources
 import logging
 import numpy as np
 from pathlib import Path
 from queue import Queue
 import time
 from threading import Event, Thread
+import yaml
 
 import redis
 
+USE_CASPERFPGA = True
 try:
     import casperfpga
     from casperfpga.transport_tapcp import TapcpTransport
 except ImportError:
-    logging.warning("Running without casperfpga installed")
+    USE_CASPERFPGA = False
     TapcpTransport = None
 
 from . import io
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync
-from .data import DATA_PATH
 
 logger = logging.getLogger(__name__)
-SNAP_IP = "10.10.10.236"
-FPG_FILE = Path(DATA_PATH) / "eigsep_fengine_1g_v2_3_2024-07-08_1858.fpg"
+if not USE_CASPERFPGA:
+    logger.warning("Running without casperfpga installed")
+CONFIG_PATH = resources.files("eigsep_corr") / "config"
+
+
+def load_config(config_file, config_path=CONFIG_PATH):
+    """
+    Load configuration from a YAML file.
+
+    Parameters
+    ----------
+    config_file : str or Path
+        Path to the configuration file.
+    config_path : Path
+        Path to the directory containing configuration files.
+        Used if `config_file` is a relative path.
+
+    Returns
+    -------
+    dict
+        Configuration dictionary.
+    """
+    config_file = Path(config_file)
+    if not config_file.is_absolute():
+        config_file = config_path / config_file
+    with open(config_file, "r") as f:
+        config = yaml.safe_load(f)
+    return config
+
+
+default_config = load_config("config.yaml")
 
 
 class EigsepFpga:
 
-    def __init__(
-        self,
-        snap_ip=SNAP_IP,
-        fpg_file=FPG_FILE,
-        program=False,
-        use_ref=True,
-        transport=TapcpTransport,
-        force_program=False,
-    ):
+    def __init__(self, cfg=default_config, program=False):
         """
         Class for interfacing with the SNAP board.
 
         Parameters
         ----------
-        snap_ip : str
-            The IP address of the SNAP board. The two used for EIGSEP are
-            10.10.10.13 and 10.10.10.18.
-        fpg_file : str
-            The path to the fpg file to program the SNAP with.
-        program : bool
-            Whether to program the SNAP with the fpg file.
-        use_ref : False
-            Supply 10 MHz reference and let SNAP generate sample clock.
-            If False, supply 500 MHz clock directly to the SNAP board.
-        transport : casperfpga.transport_tapcp.TapcpTransport
-            The transport protocol to use. The default is TapcpTransport.
-        logger : logging.Logger
-            The logger to use. If None, creates a new logger.
-        read_accelerometer : bool
-            Whether to read accelerometer data from the platform
-            FEM. Default is False.
-        force_program : bool
-            If program is True, decide whether to force casperfpga to program
-            or not. By default, casperfpga skips the programming if the
-            filename is the same, but this flag overrides that.
+        cfg : dict
+            Configuration dictionary. See `config/config.yaml` for
+            details.
+        program : bool or str
+            Whether to program the SNAP with the fpg file. Options are
+            True (program if fpg_file is different from the one in
+            flash), False (do not program), 'force' (always program).
 
         """
         self.logger = logger
-        # defaults
-        self.defaults = {
-            "sample_rate": 500,  # MHz
-            "fpg_version": (2, 3),  # major, minor
-            "adc_gain": 4,  # ADC gain
-            "fft_shift": 0x0055,  # FFT shift
-            "corr_acc_len": 2
-            ** 28,  # makes corr_acc_cnt increment by ~1 per second
-            "corr_scalar": 2
-            ** 9,  # 2**9 = 1, correlator uses 8 bits after binary point
-            "pam_attenuation": {
-                0: (8, 8),
-                1: (8, 8),
-                2: (8, 8),
-            },
-            "pol_delay": {
-                "01": 0,
-                "23": 0,
-                "45": 0,
-            },
-            "nchan": 1024,  # number of channels
-        }
+        self.logger.debug("Initializing EigsepFpga")
+        self.cfg = cfg
 
-        self.corr_word = 4  # number of bytes per correlation word
-        self.data_type = ">i4"  # numpy data type for correlation data
-        redis_host = "localhost"
-        redis_port = 6379
+        fpg_file = Path(self.cfg["fpg_file"])
+        if not fpg_file.is_absolute():
+            self.fpg_file = resources.files("eigsep_corr") / "data" / fpg_file
+        else:
+            self.fpg_file = fpg_file
 
-        self.fpg_file = fpg_file
-        self.fpga = casperfpga.CasperFpga(snap_ip, transport=transport)
+        self.fpga = casperfpga.CasperFpga(
+            self.cfg["snap_ip"], transport=TapcpTransport
+        )
         if program:
-            self.fpga.upload_to_ram_and_program(
-                self.fpg_file, force=force_program
-            )
+            force = program == "force"
+            self.fpga.upload_to_ram_and_program(self.fpg_file, force=force)
 
-        if use_ref:
+        if cfg["use_ref"]:
             ref = 10
         else:
             ref = None
+
         # blocks
         self.adc = casperfpga.snapadc.SnapAdc(
             self.fpga, num_chans=2, resolution=8, ref=ref
@@ -129,15 +120,11 @@ class EigsepFpga:
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
-        self.redis = redis.Redis(redis_host, port=redis_port)
+        self.redis = redis.Redis("localhost", port=6379)
 
         self.adc_initialized = False
         self.pams_initialized = False
         self.is_synchronized = False
-
-        self.file = None
-        self.queue = None
-        self.event = None
 
     @property
     def version(self):
@@ -146,10 +133,13 @@ class EigsepFpga:
         minor = val & 0xFFFF
         return (major, minor)
 
-    def check_version(self, expected_version=None):
-        if expected_version is None:
-            expected_version = self.defaults["fpg_version"]
-        assert self.version == expected_version
+    def check_version(self):
+        expected_version = tuple(self.cfg["fpg_version"])
+        if not self.version == expected_version:
+            raise RuntimeError(
+                f"FPGA version {self.version} does not match "
+                f"expected version {expected_version}."
+            )
 
     @property
     def header(self):
@@ -159,8 +149,8 @@ class EigsepFpga:
 
         """
         m = {
-            "nchan": self.nchan,
-            "fpg_file": self.fpg_file,
+            "nchan": self.cfg["nchan"],
+            "fpg_file": str(self.fpg_file),
             "fpg_version": self.version,
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
@@ -168,7 +158,7 @@ class EigsepFpga:
             "pol23_delay": self.fpga.read_uint("pfb_pol23_delay"),
             "pol45_delay": self.fpga.read_uint("pfb_pol45_delay"),
             "fft_shift": self.pfb.get_fft_shift(),
-            "data_type": self.data_type,
+            "data_type": self.cfg["dtype"],
         }
         if self.adc_initialized:
             m["sample_rate"] = self.adc.sample_rate
@@ -206,17 +196,13 @@ class EigsepFpga:
             if tries > n_tries:
                 raise RuntimeError(f"test failed after {tries} tries")
 
-    def initialize_adc(self, sample_rate=None, gain=None, n_tries=10):
+    def initialize_adc(self, n_tries=10):
         """
         Initialize the ADC. Aligns the clock and data lanes, and runs a ramp
         test.
 
         Parameters
         ----------
-        sample_rate : int
-            The sample rate in MHz.
-        gain : int
-            The gain of the ADC.
         n_tries : int
             Number of attempts at each test before giving up. Default 10.
 
@@ -225,10 +211,8 @@ class EigsepFpga:
         RuntimeError
             If the tests do not pass after n_tries attempts.
         """
-        if sample_rate is None:
-            sample_rate = self.defaults["sample_rate"]
-        if gain is None:
-            gain = self.defaults["adc_gain"]
+        sample_rate = self.cfg["sample_rate"]
+        gain = self.cfg["adc_gain"]
 
         self.logger.info("Initializing ADCs")
         self.adc.init(sample_rate=sample_rate)
@@ -245,47 +229,21 @@ class EigsepFpga:
         self.adc.gain = gain
         self.adc_initialized = True
 
-    def initialize_fpga(
-        self,
-        fft_shift=None,
-        corr_acc_len=None,
-        corr_scalar=None,
-        pol_delay=None,
-        pam_atten=None,
-        verify=False,
-    ):
+    def initialize_fpga(self, verify=False):
         """
         Initialize the correlator.
 
-        Parameters
-        ----------
-        fft_shift : int
-        corr_acc_len : int (power of 2)
-            The accumulation length.  Default CORR_ACC_LEN.
-        corr_scalar : int (power of 2)
-            Scalar that is multiplied to each correlation.
-        pol_delay : dict
-            Keys are "01", "23", and "45". Values (int) are the delay.
-        pam_atten : dict
-            Keys are antenna numbers, values are tuples of (east, north).
-
         """
-        if fft_shift is None:
-            fft_shift = self.defaults["fft_shift"]
-        if corr_acc_len is None:
-            corr_acc_len = self.defaults["corr_acc_len"]
-        if corr_scalar is None:
-            corr_scalar = self.defaults["corr_scalar"]
-        if pol_delay is None:
-            pol_delay = self.defaults["pol_delay"]
-        if pam_atten is None:
-            pam_atten = self.defaults["pam_attenuation"]
+        fft_shift = self.cfg["fft_shift"]
+        corr_acc_len = self.cfg["corr_acc_len"]
+        corr_scalar = self.cfg["corr_scalar"]
+        pol_delay = self.cfg["pol_delay"]
 
         for blk in self.blocks:
             blk.initialize()
         try:
             # initialize pams
-            self.initialize_pams(attenuation=pam_atten)
+            self.initialize_pams()
         except OSError:
             self.logger.warn("Couldn't initialize PAMs.")
             pass
@@ -300,13 +258,13 @@ class EigsepFpga:
             assert self.fpga.read_uint("corr_scalar") == corr_scalar
         self.set_pol_delay(delay=pol_delay, verify=verify)
 
-    def set_input(self, use_noise=False):
+    def set_input(self):
         """
         Set the input to either noise or ADC based on the configuration.
         This method is called after initializing the ADC and FPGA.
         """
         self.noise.set_seed(stream=None, seed=0)
-        if use_noise:
+        if self.cfg["use_noise"]:
             self.logger.warning("Switching to noise input.")
             self.inp.use_noise(stream=None)
             self.sync.arm_noise()
@@ -337,7 +295,7 @@ class EigsepFpga:
             if verify:
                 assert self.fpga.read_uint(f"pfb_pol{key}_delay") == dly
 
-    def initialize_pams(self, attenuation=None):
+    def initialize_pams(self):
         """
         Initialize the PAMs.
 
@@ -348,8 +306,7 @@ class EigsepFpga:
             numbers, values are tuples of (east, north) attenuation values.
 
         """
-        if attenuation is None:
-            attenuation = self.defaults["pam_attenuation"]
+        attenuation = self.cfg["pam_atten"]
 
         self.pams = []
         for p, (att_e, att_n) in attenuation.items():
@@ -396,9 +353,8 @@ class EigsepFpga:
             of unpacked correlation data.
 
         """
-        return {
-            k: np.frombuffer(v, dtype=self.data_type) for k, v in data.items()
-        }
+        dt = self.cfg["dtype"]
+        return {k: np.frombuffer(v, dtype=dt) for k, v in data.items()}
 
     def _read_spec(self, spec_type, i, unpack):
         """
@@ -433,7 +389,7 @@ class EigsepFpga:
         if len(i) == 0:
             return {}
         # total number of bytes to read, factor of 2 is for odd/even
-        nbytes = self.corr_word * 2 * self.nchan
+        nbytes = self.cfg["corr_word"] * 2 * self.cfg["nchan"]
         if spec_type == "cross":
             nbytes *= 2  # real/imag for cross correlations
         spec = {}
@@ -549,11 +505,14 @@ class EigsepFpga:
             The current integration count.
 
         """
+        corr_word = self.cfg["corr_word"]
+        nchan = self.cfg["nchan"]
+        spec_len = corr_word * nchan
         for p, d in data.items():
             if len(p) == 1:
-                d = d[: self.corr_word * self.nchan]
+                d = d[:spec_len]  # only one spectrum for auto
             else:
-                d = d[: self.corr_word * 2 * self.nchan]  # two for real/imag
+                d = d[: 2 * spec_len]  # two for real/imag
             self.redis.set(f"data:{p}", d)
         self.redis.set("ACC_CNT", cnt)
         self.redis.set("updated_unix", int(time.time()))
@@ -608,7 +567,6 @@ class EigsepFpga:
         timeout=10,
         update_redis=True,
         write_files=True,
-        ntimes=io.DEFAULT_NTIMES,
         header=io.DEFAULT_HEADER,
     ):
         """
@@ -632,9 +590,12 @@ class EigsepFpga:
         header : dict
             Header to write to each file. Default is io.DEFAULT_HEADER.
         """
+        self.file = None
         self.queue = Queue(maxsize=0)  # XXX infinite size
         self.event = Event()
+        ntimes = self.cfg.get("ntimes", io.DEFAULT_NTIMES)
 
+        self.logger.debug("Start reading integrations.")
         thd = Thread(
             target=self._read_integrations,
             args=(pairs,),
