@@ -32,6 +32,7 @@ from . import io
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync
 from .data import DATA_PATH
 
+logger = logging.getLogger(__name__)
 SNAP_IP = "10.10.10.236"
 FPG_FILE = Path(DATA_PATH) / "eigsep_fengine_1g_v2_3_2024-07-08_1858.fpg"
 
@@ -72,7 +73,6 @@ class EigsepFpga:
         program=False,
         use_ref=True,
         transport=TapcpTransport,
-        logger=None,
         force_program=False,
     ):
         """
@@ -103,9 +103,6 @@ class EigsepFpga:
             filename is the same, but this flag overrides that.
 
         """
-        if logger is None:
-            logger = logging.getLogger(__name__)
-            logger.setLevel(logging.DEBUG)
         self.logger = logger
 
         self.fpg_file = fpg_file
