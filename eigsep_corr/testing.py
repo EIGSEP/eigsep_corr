@@ -88,15 +88,28 @@ class DummyAdc(DummyBlock):
 
 
 class DummyPfb(DummyBlock):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fft_shift = None
 
     def set_fft_shift(self, fft_shift):
-        pass
+        self.fft_shift = fft_shift
+
+    def get_fft_shift(self):
+        return self.fft_shift
 
 
 class DummyPam(DummyBlock):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.attenuation = (0, 0)
+
     def set_attenuation(self, att_e, att_n):
-        pass
+        self.attenuation = (att_e, att_n)
+
+    def get_attenuation(self):
+        return self.attenuation
 
 
 class DummySync(DummyBlock):
