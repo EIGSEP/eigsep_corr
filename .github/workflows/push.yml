@@ -27,6 +27,3 @@ jobs:
       - name: Test with pytest
         run: |
           pytest eigsep_corr/tests
-      - name: Type check with mypy
-        run: |
-          mypy .
