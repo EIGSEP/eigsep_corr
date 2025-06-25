@@ -4,7 +4,8 @@ import logging
 LOG_LEVEL = logging.DEBUG
 logging.basicConfig(level=LOG_LEVEL)
 
-from eigsep_corr.fpga import EigsepFpga, load_config
+from eigsep_corr.config import load_config
+from eigsep_corr.fpga import EigsepFpga
 from eigsep_corr.testing import DummyEigsepFpga
 
 logger = logging.getLogger(__name__)

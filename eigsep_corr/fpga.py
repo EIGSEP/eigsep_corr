@@ -12,14 +12,12 @@ CORR_SCALAR (18_8).
 """
 
 import datetime
-from importlib import resources
 import logging
 import numpy as np
 from pathlib import Path
 from queue import Queue
 import time
 from threading import Event, Thread
-import yaml
 
 import redis
 
@@ -33,37 +31,12 @@ except ImportError:
 
 from . import io
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync
+from .config import load_config
+from .utils import get_data_path
 
 logger = logging.getLogger(__name__)
 if not USE_CASPERFPGA:
     logger.warning("Running without casperfpga installed")
-CONFIG_PATH = resources.files("eigsep_corr") / "config"
-
-
-def load_config(config_file, config_path=CONFIG_PATH):
-    """
-    Load configuration from a YAML file.
-
-    Parameters
-    ----------
-    config_file : str or Path
-        Path to the configuration file.
-    config_path : Path
-        Path to the directory containing configuration files.
-        Used if `config_file` is a relative path.
-
-    Returns
-    -------
-    dict
-        Configuration dictionary.
-    """
-    config_file = Path(config_file)
-    if not config_file.is_absolute():
-        config_file = config_path / config_file
-    with open(config_file, "r") as f:
-        config = yaml.safe_load(f)
-    return config
-
 
 default_config = load_config("config.yaml")
 
@@ -91,7 +64,7 @@ class EigsepFpga:
 
         fpg_file = Path(self.cfg["fpg_file"])
         if not fpg_file.is_absolute():
-            self.fpg_file = resources.files("eigsep_corr") / "data" / fpg_file
+            self.fpg_file = get_data_path(fname=fpg_file)
         else:
             self.fpg_file = fpg_file
 
@@ -256,7 +229,7 @@ class EigsepFpga:
         if verify:
             assert self.fpga.read_uint("corr_acc_len") == corr_acc_len
             assert self.fpga.read_uint("corr_scalar") == corr_scalar
-        self.set_pol_delay(delay=pol_delay, verify=verify)
+        self.set_pol_delay(pol_delay, verify=verify)
 
     def set_input(self):
         """
@@ -289,9 +262,8 @@ class EigsepFpga:
         """
         for key in ["01", "23", "45"]:
             dly = delay.get(key, 0)
-            if dly != 0:
-                self.logger.info(f"Setting POL{key}_DELAY: {dly}")
-                self.fpga.write_int(f"pfb_pol{key}_delay", dly)
+            self.logger.info(f"Setting POL{key}_DELAY: {dly}")
+            self.fpga.write_int(f"pfb_pol{key}_delay", dly)
             if verify:
                 assert self.fpga.read_uint(f"pfb_pol{key}_delay") == dly
 
