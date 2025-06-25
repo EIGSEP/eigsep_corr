@@ -16,7 +16,6 @@ USE_NOISE = False  # use digital noise instead of ADC data
 PAM_ATTEN = {"0": (8, 8), "1": (8, 8), "2": (8, 8)}  # order is EAST, NORTH
 SAVE_DIR = "/media/eigsep/T7/data"
 LOG_LEVEL = logging.INFO
-LOG_LEVEL = logging.DEBUG
 
 parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
