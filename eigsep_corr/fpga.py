@@ -13,11 +13,13 @@ CORR_SCALAR (18_8).
 
 import datetime
 import logging
-import redis
+import numpy as np
+from pathlib import Path
+from queue import Queue
 import time
 from threading import Event, Thread
-from queue import Queue
-import numpy as np
+
+import redis
 
 try:
     import casperfpga
@@ -27,29 +29,42 @@ except ImportError:
     TapcpTransport = None
 
 from . import io
-from .blocks import Input, Fem, NoiseGen, Pam, Pfb, Sync
+from .blocks import Input, NoiseGen, Pam, Pfb, Sync
 from .data import DATA_PATH
 
 SNAP_IP = "10.10.10.236"
-SAMPLE_RATE = 500  # MHz
-FPG_FILE = os.path.join(
-    DATA_PATH, "eigsep_fengine_1g_v2_3_2024-07-08_1858.fpg"
-)
-FPG_VERSION = (2, 3)  # major, minor
-ADC_GAIN = 4
-FFT_SHIFT = 0x0055
-CORR_ACC_LEN = 2**28  # makes corr_acc_cnt increment by ~1 per second
-CORR_SCALAR = 2**9  # correlator uses 8 bits after binary point so 2**9 = 1
-CORR_WORD = 4  # bytes
-DEFAULT_PAM_ATTEN = {0: (8, 8), 1: (8, 8), 2: (8, 8)}
-DEFAULT_POL_DELAY = {"01": 0, "23": 0, "45": 0}
-N_FEMS = 0  # set to 0 since they're not initialized from SNAP
-NCHAN = 1024
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
+FPG_FILE = Path(DATA_PATH) / "eigsep_fengine_1g_v2_3_2024-07-08_1858.fpg"
 
 
 class EigsepFpga:
+
+    # defaults
+    defaults = {
+        "sample_rate": 500,  # MHz
+        "fpg_version": (2, 3),  # major, minor
+        "adc_gain": 4,  # ADC gain
+        "fft_shift": 0x0055,  # FFT shift
+        "corr_acc_len": 2**28,  # makes corr_acc_cnt increment by ~1 per second
+        "corr_scalar": 2
+        ** 9,  # 2**9 = 1, correlator uses 8 bits after binary point
+        "pam_attenuation": {
+            0: (8, 8),
+            1: (8, 8),
+            2: (8, 8),
+        },
+        "pol_delay": {
+            "01": 0,
+            "23": 0,
+            "45": 0,
+        },
+        "nchan": 1024,  # number of channels
+        "redis_host": "localhost",
+        "redis_port": 6379,
+    }
+
+    corr_word = 4  # number of bytes per correlation word
+    data_type = ">i4"  # numpy data type for correlation data
+
     def __init__(
         self,
         snap_ip=SNAP_IP,
@@ -58,7 +73,6 @@ class EigsepFpga:
         ref=None,
         transport=TapcpTransport,
         logger=None,
-        read_accelerometer=False,
         force_program=False,
     ):
         """
@@ -97,7 +111,9 @@ class EigsepFpga:
         self.fpg_file = fpg_file
         self.fpga = casperfpga.CasperFpga(snap_ip, transport=transport)
         if program:
-            self.fpga.upload_to_ram_and_program(self.fpg_file, force=force_program)
+            self.fpga.upload_to_ram_and_program(
+                self.fpg_file, force=force_program
+            )
 
         # blocks
         self.adc = casperfpga.snapadc.SnapAdc(
@@ -112,7 +128,7 @@ class EigsepFpga:
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
-        self.redis = redis.Redis(REDIS_HOST, port=REDIS_PORT)
+        self.redis = redis.Redis(self.redis_host, port=self.redis_port)
 
         self.adc_initialized = False
         self.pams_initialized = False
@@ -130,17 +146,17 @@ class EigsepFpga:
         return (major, minor)
 
     def check_version(self):
-        assert self.version == FPG_VERSION
+        assert self.version == self.fpg_version
 
     @property
     def metadata(self):
         """
         This attribute only includes metadata that is not changing during
-        observation. 
+        observation.
 
         """
         m = {
-            "nchan": NCHAN,
+            "nchan": self.nchan,
             "fpg_file": self.fpg_file,
             "fpg_version": self.version,
             "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
@@ -186,9 +202,7 @@ class EigsepFpga:
             if tries > n_tries:
                 raise RuntimeError(f"test failed after {tries} tries")
 
-    def initialize_adc(
-        self, sample_rate=SAMPLE_RATE, gain=ADC_GAIN, n_tries=10
-    ):
+    def initialize_adc(self, sample_rate=None, gain=None, n_tries=10):
         """
         Initialize the ADC. Aligns the clock and data lanes, and runs a ramp
         test.
@@ -196,9 +210,9 @@ class EigsepFpga:
         Parameters
         ----------
         sample_rate : int
-            The sample rate in MHz. Default SAMPLE_RATE.
+            The sample rate in MHz.
         gain : int
-            The gain of the ADC. Default ADC_GAIN.
+            The gain of the ADC.
         n_tries : int
             Number of attempts at each test before giving up. Default 10.
 
@@ -207,6 +221,11 @@ class EigsepFpga:
         RuntimeError
             If the tests do not pass after n_tries attempts.
         """
+        if sample_rate is None:
+            sample_rate = self.defaults["sample_rate"]
+        if gain is None:
+            gain = self.defaults["adc_gain"]
+
         self.logger.info("Initializing ADCs")
         self.adc.init(sample_rate=sample_rate)
 
@@ -224,11 +243,11 @@ class EigsepFpga:
 
     def initialize_fpga(
         self,
-        fft_shift=FFT_SHIFT,
-        corr_acc_len=CORR_ACC_LEN,
-        corr_scalar=CORR_SCALAR,
-        pol_delay=DEFAULT_POL_DELAY,
-        pam_atten=DEFAULT_PAM_ATTEN,
+        fft_shift=None,
+        corr_acc_len=None,
+        corr_scalar=None,
+        pol_delay=None,
+        pam_atten=None,
         verify=False,
     ):
         """
@@ -247,6 +266,17 @@ class EigsepFpga:
             Keys are antenna numbers, values are tuples of (east, north).
 
         """
+        if fft_shift is None:
+            fft_shift = self.defaults["fft_shift"]
+        if corr_acc_len is None:
+            corr_acc_len = self.defaults["corr_acc_len"]
+        if corr_scalar is None:
+            corr_scalar = self.defaults["corr_scalar"]
+        if pol_delay is None:
+            pol_delay = self.defaults["pol_delay"]
+        if pam_atten is None:
+            pam_atten = self.defaults["pam_attenuation"]
+
         for blk in self.blocks:
             blk.initialize()
         try:
@@ -266,13 +296,13 @@ class EigsepFpga:
             assert self.fpga.read_uint("corr_scalar") == corr_scalar
         self.set_pol_delay(delay=pol_delay, verify=verify)
 
-    def set_input(self):
+    def set_input(self, use_noise=False):
         """
         Set the input to either noise or ADC based on the configuration.
         This method is called after initializing the ADC and FPGA.
         """
         self.noise.set_seed(stream=None, seed=0)
-        if self.cfg.use_noise:
+        if use_noise:
             self.logger.warning("Switching to noise input.")
             self.inp.use_noise(stream=None)
             self.sync.arm_noise()
@@ -291,7 +321,7 @@ class EigsepFpga:
         Parameters
         ----------
         delay : dict
-            Keys are "01", "23", and "45". Values (int) are the delay in 
+            Keys are "01", "23", and "45". Values (int) are the delay in
             clock cycles. Max 1024 (2^10).
 
         """
@@ -303,7 +333,7 @@ class EigsepFpga:
             if verify:
                 assert self.fpga.read_uint(f"pfb_pol{key}_delay") == dly
 
-    def initialize_pams(self, attenuation=DEFAULT_PAM_ATTEN):
+    def initialize_pams(self, attenuation=None):
         """
         Initialize the PAMs.
 
@@ -314,6 +344,9 @@ class EigsepFpga:
             numbers, values are tuples of (east, north) attenuation values.
 
         """
+        if attenuation is None:
+            attenuation = self.defaults["pam_attenuation"]
+
         self.pams = []
         for p, (att_e, att_n) in attenuation.items():
             pam = Pam(self.fpga, f"i2c_ant{p}")
@@ -396,7 +429,7 @@ class EigsepFpga:
         if len(i) == 0:
             return {}
         # total number of bytes to read, factor of 2 is for odd/even
-        nbytes = self.cfg.corr_word * 2 * self.cfg.nchan
+        nbytes = self.corr_word * 2 * self.nchan
         if spec_type == "cross":
             nbytes *= 2  # real/imag for cross correlations
         spec = {}
@@ -514,9 +547,9 @@ class EigsepFpga:
         """
         for p, d in data.items():
             if len(p) == 1:
-                d = d[: CORR_WORD * NCHAN]
+                d = d[: self.corr_word * self.nchan]
             else:
-                d = d[: CORR_WORD * 2 * NCHAN]  # two for real/imag
+                d = d[: self.corr_word * 2 * self.nchan]  # two for real/imag
             self.redis.set(f"data:{p}", d)
         self.redis.set("ACC_CNT", cnt)
         self.redis.set("updated_unix", int(time.time()))
