@@ -58,19 +58,19 @@ class EigsepFpga:
             "45": 0,
         },
         "nchan": 1024,  # number of channels
-        "redis_host": "localhost",
-        "redis_port": 6379,
     }
 
     corr_word = 4  # number of bytes per correlation word
     data_type = ">i4"  # numpy data type for correlation data
+    redis_host = "localhost"
+    redis_port = 6379
 
     def __init__(
         self,
         snap_ip=SNAP_IP,
         fpg_file=FPG_FILE,
         program=False,
-        ref=None,
+        use_ref=True,
         transport=TapcpTransport,
         logger=None,
         force_program=False,
@@ -87,9 +87,9 @@ class EigsepFpga:
             The path to the fpg file to program the SNAP with.
         program : bool
             Whether to program the SNAP with the fpg file.
-        ref : int
-            The reference clock frequency in MHz. If None, uses the
-            500 MHz clock on the SNAP board. Typically set to None or 10.
+        use_ref : False
+            Supply 10 MHz reference and let SNAP generate sample clock.
+            If False, supply 500 MHz clock directly to the SNAP board.
         transport : casperfpga.transport_tapcp.TapcpTransport
             The transport protocol to use. The default is TapcpTransport.
         logger : logging.Logger
@@ -115,6 +115,10 @@ class EigsepFpga:
                 self.fpg_file, force=force_program
             )
 
+        if use_ref:
+            ref = 10
+        else:
+            ref = None
         # blocks
         self.adc = casperfpga.snapadc.SnapAdc(
             self.fpga, num_chans=2, resolution=8, ref=ref
