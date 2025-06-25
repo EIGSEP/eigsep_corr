@@ -600,7 +600,7 @@ class EigsepFpga:
 
         thd = Thread(
             target=self._read_integrations,
-            args=(pairs),
+            args=(pairs,),
             kwargs={"timeout": timeout},
         )
         thd.start()
