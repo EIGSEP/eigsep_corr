@@ -1,7 +1,8 @@
 import time
 import logging
-import redis
 from math import floor
+
+import fakeredis
 
 from .fpga import EigsepFpga
 from .fpga import SNAP_IP, FPG_FILE
@@ -116,7 +117,7 @@ class DummySync(DummyBlock):
 
 class DummyNoise(DummyBlock):
 
-    def set_seed(self, steam=None, seed=0):
+    def set_seed(self, stream=None, seed=0):
         pass
 
 
@@ -160,6 +161,7 @@ class DummyEigsepFpga(EigsepFpga):
         else:
             ref = None
 
+        self.logger.debug("Adding dummy blocks to FPGA")
         self.adc = DummyAdc(self.fpga, ref=ref)
         self.sync = DummySync(self.fpga)
         self.noise = DummyNoise(self.fpga)
@@ -170,7 +172,8 @@ class DummyEigsepFpga(EigsepFpga):
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
-        self.redis = redis.Redis(self.redis_host, port=self.redis_port)
+        self.logger.debug("Initializing dummy Redis")
+        self.redis = fakeredis.FakeRedis()
 
         self.adc_initialized = False
         self.pams_initialized = False
