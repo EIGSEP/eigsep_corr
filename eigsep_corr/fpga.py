@@ -149,8 +149,10 @@ class EigsepFpga:
         minor = val & 0xFFFF
         return (major, minor)
 
-    def check_version(self):
-        assert self.version == self.fpg_version
+    def check_version(self, expected_version=None):
+        if expected_version is None:
+            expected_version = self.defaults["fpg_version"]
+        assert self.version == expected_version
 
     @property
     def metadata(self):
