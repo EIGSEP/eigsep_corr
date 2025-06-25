@@ -100,7 +100,9 @@ parser.add_argument(
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=LOG_LEVEL)
+if args.dummy_mode:
+    LOG_LEVEL = logging.DEBUG
+logger.setLevel(LOG_LEVEL)
 
 force_program = args.force_program
 program = args.program or force_program
@@ -121,9 +123,11 @@ else:
     fpga = EigsepFpga(**fpga_kwargs)
 
 if args.initialize_adc:
+    logger.debug("Initializing ADCs")
     fpga.initialize_adc(sample_rate=SAMPLE_RATE, gain=GAIN)
 
 if args.initialize_fpga:
+    logger.debug("Initializing FPGA")
     fpga.initialize_fpga(
         fft_shift=FFT_SHIFT,
         corr_acc_len=CORR_ACC_LEN,
