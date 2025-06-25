@@ -4,8 +4,9 @@ from math import floor
 
 import fakeredis
 
-from .fpga import EigsepFpga
-from .fpga import SNAP_IP, FPG_FILE
+from .fpga import EigsepFpga, default_config
+
+logger = logging.getLogger(__name__)
 
 
 class DummyBlock:
@@ -131,58 +132,25 @@ class DummyInput(DummyBlock):
 
 
 class DummyEigsepFpga(EigsepFpga):
-    def __init__(
-        self,
-        snap_ip=SNAP_IP,
-        fpg_file=FPG_FILE,
-        program=False,
-        use_ref=False,
-        transport=None,
-        logger=None,
-        force_program=False,
-    ):
-        if logger is None:
-            logger = logging.getLogger(__name__)
-            logger.setLevel(logging.DEBUG)
+    def __init__(self, cfg=default_config, program=False):
         self.logger = logger
+        self.cfg = cfg
 
-        # defaults
-        self.defaults = {
-            "sample_rate": 500,  # MHz
-            "fpg_version": (2, 3),  # major, minor
-            "adc_gain": 4,  # ADC gain
-            "fft_shift": 0x0055,  # FFT shift
-            "corr_acc_len": 2
-            ** 28,  # makes corr_acc_cnt increment by ~1 per second
-            "corr_scalar": 2
-            ** 9,  # 2**9 = 1, correlator uses 8 bits after binary point
-            "pam_attenuation": {
-                0: (8, 8),
-                1: (8, 8),
-                2: (8, 8),
-            },
-            "pol_delay": {
-                "01": 0,
-                "23": 0,
-                "45": 0,
-            },
-            "nchan": 1024,  # number of channels
-        }
-
-        self.corr_word = 4  # number of bytes per correlation word
-        self.data_type = ">i4"  # numpy data type for correlation data
-
-        self.fpg_file = fpg_file
-        cnt_period = self.defaults["corr_acc_len"] / (
-            self.defaults["sample_rate"] * 1e6
-        )
+        self.fpg_file = self.cfg["fpg_file"]
+        corr_acc_len = self.cfg["corr_acc_len"]
+        sample_rate = self.cfg["sample_rate"]
+        cnt_period = corr_acc_len / (sample_rate * 1e6)
         self.fpga = DummyFpga(
-            [], snap_ip=snap_ip, transport=transport, cnt_period=cnt_period
+            [],
+            snap_ip=self.cfg["snap_ip"],
+            transport=None,
+            cnt_period=cnt_period,
         )
         if program:
-            self.fpga.upload_to_ram_and_program(fpg_file, force=force_program)
+            force = program == "force"
+            self.fpga.upload_to_ram_and_program(self.fpg_file, force=force)
 
-        if use_ref:
+        if cfg["use_ref"]:
             ref = 10
         else:
             ref = None
@@ -205,16 +173,8 @@ class DummyEigsepFpga(EigsepFpga):
         self.pams_initialized = False
         self.is_synchronized = False
 
-        self.sample_rate = self.defaults["sample_rate"]
-        self.nchan = self.defaults["nchan"]
-        self.acc_len = self.defaults["corr_acc_len"]
-
-        self.file = None
-        self.queue = None
-        self.event = None
-
-    def initialize_pams(self, attenuation=(8, 8)):
-
+    def initialize_pams(self):
+        attenuation = self.cfg["pam_atten"]
         self.pams = []
         for p, (att_e, att_n) in attenuation.items():
             pam = DummyPam(self.fpga, f"i2c_ant{p}")
