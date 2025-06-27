@@ -1,7 +1,7 @@
 from pathlib import Path
 import yaml
 
-from .utils import get_config_path
+from .utils import calc_inttime, get_config_path
 
 
 def load_config(name):

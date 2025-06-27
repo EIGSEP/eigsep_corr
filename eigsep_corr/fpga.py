@@ -235,7 +235,7 @@ class EigsepFpga:
             "fpg_version": self.version,
             "sample_rate": sample_rate,
             "nchan": self.cfg["nchan"],
-            "use_ref": self.cfg["use_ref"]
+            "use_ref": self.cfg["use_ref"],
             "use_noise": self.cfg["use_noise"],
             "adc_gain": adc_gain,
             "fft_shift": self.pfb.get_fft_shift(),
