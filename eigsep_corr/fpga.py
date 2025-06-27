@@ -32,7 +32,7 @@ except ImportError:
 from . import io
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync
 from .config import load_config
-from .utils import get_data_path
+from .utils import calc_inttime, get_data_path
 
 logger = logging.getLogger(__name__)
 if not USE_CASPERFPGA:
@@ -202,38 +202,61 @@ class EigsepFpga:
             as the actual values from the SNAP board.
 
         """
+        if self.adc_initialized:
+            sample_rate = self.adc.sample_rate / 1e6  # in MHz
+            adc_gain = self.adc.gain
+        else:
+            sample_rate = self.cfg["sample_rate"]
+            adc_gain = self.cfg["adc_gain"]
+        if self.pams_initialized:
+            pam_atten = {
+                int(i): list(p.get_attenuation())
+                for i, p in enumerate(self.pams)
+            }
+        else:
+            pam_atten = self.cfg["pam_atten"]
+        if self.is_synchronized:
+            sync_time = self.sync_time
+        else:
+            sync_time = 0
+
+        corr_acc_len = self.fpga.read_uint("corr_acc_len")
+        acc_bins = self.cfg["acc_bins"]
+        t_int = calc_inttime(
+            sample_rate * 1e6,  # in Hz
+            corr_acc_len,
+            acc_bins=acc_bins,
+        )
+        ntimes = self.cfg["ntimes"]
+        file_time = t_int * ntimes
         m = {
             "snap_ip": self.cfg["snap_ip"],
             "fpg_file": str(self.fpg_file),
             "fpg_version": self.version,
+            "sample_rate": sample_rate,
             "nchan": self.cfg["nchan"],
-            "use_ref": self.cfg["use_ref"],
+            "use_ref": self.cfg["use_ref"]
             "use_noise": self.cfg["use_noise"],
+            "adc_gain": adc_gain,
             "fft_shift": self.pfb.get_fft_shift(),
-            "corr_acc_len": self.fpga.read_uint("corr_acc_len"),
+            "corr_acc_len": corr_acc_len,
             "corr_scalar": self.fpga.read_uint("corr_scalar"),
             "corr_word": self.cfg["corr_word"],
-            "acc_bins": self.cfg["acc_bins"],
+            "acc_bins": acc_bins,
             "dtype": self.cfg["dtype"],
+            "pam_atten": pam_atten,
             "pol_delay": {
                 "01": self.fpga.read_uint("pfb_pol01_delay"),
                 "23": self.fpga.read_uint("pfb_pol23_delay"),
                 "45": self.fpga.read_uint("pfb_pol45_delay"),
             },
-            "ntimes": self.cfg["ntimes"],
+            "ntimes": ntimes,
             "save_dir": self.cfg["save_dir"],
             "redis": self.cfg["redis"],
+            "sync_time": sync_time,
+            "integration_time": t_int,
+            "file_time": file_time,
         }
-        if self.adc_initialized:
-            m["sample_rate"] = self.adc.sample_rate / 1e6  # in MHz
-            m["adc_gain"] = self.adc.gain
-        if self.pams_initialized:
-            m["pam_atten"] = {
-                int(i): list(p.get_attenuation())
-                for i, p in enumerate(self.pams)
-            }
-        if self.is_synchronized:
-            m["sync_time"] = self.sync_time
         return m
 
     def validate_config(self):
