@@ -88,23 +88,10 @@ def add_args(parser, default_config_file=default_config_file):
         help="Sync Eigsep correlator.",
     )
     parser.add_argument(
-        "-w",
-        dest="write_files",
-        action="store_true",
-        default=False,
-        help="Write data to file.",
-    )
-    parser.add_argument(
         "--config_file",
         dest="config_file",
         default=default_config_file,
         help="Configuration file for Eigsep Fpga.",
-    )
-    parser.add_argument(
-        "--save_dir",
-        dest="save_dir",
-        default=None,
-        help="Directory to save files. Overrides the default in the config file.",
     )
 
 
@@ -251,6 +238,7 @@ class EigsepFpga:
         ------
         RuntimeError
             If the configuration does not match the hardware setup.
+
         """
         fails = []
         for key, value in self.header.items():
@@ -270,6 +258,48 @@ class EigsepFpga:
                 + ", ".join(fails)
             )
 
+    def initialize(
+        self,
+        initialize_adc=True,
+        initialize_fpga=True,
+        sync=True,
+        update_redis=True,
+    ):
+        """
+        Initialize the Eigsep correlator.
+
+        Parameters
+        ----------
+        initialize_adc : bool
+            Initialize the ADCs.
+        initialize_fpga : bool
+            Initialize the FPGA.
+        sync : bool
+            Synchronize the correlator clock.
+        update_redis : bool
+            Update Redis with sync time. Only used if `sync` is True.
+
+        Notes
+        -----
+        This is a convenience method that calls the methods
+            - `initialize_adc`
+            - `initialize_fpga`
+            - `set_input`
+            - `synchronize`
+        in the specified order with their default parameters.
+
+        """
+        if initialize_adc:
+            self.logger.debug("Initializing ADCs.")
+            self.initialize_adc()
+        if initialize_fpga:
+            self.logger.debug("Initializing FPGA.")
+            self.initialize_fpga()
+        self.set_input()
+        if sync:
+            self.logger.debug("Synchronizing.")
+            self.synchronize(update_redis=update_redis)
+
     def _run_adc_test(self, test, n_tries):
         """
         Run a test and retry if it fails.
@@ -285,6 +315,7 @@ class EigsepFpga:
         ------
         RuntimeError
             If the tests do not pass after n_tries attempts.
+
         """
         fails = test()
         tries = 1
@@ -309,6 +340,11 @@ class EigsepFpga:
         ------
         RuntimeError
             If the tests do not pass after n_tries attempts.
+
+        Notes
+        -----
+        This is called by `initialize` but can be called separately.
+
         """
         sample_rate = self.cfg["sample_rate"]
         gain = self.cfg["adc_gain"]
@@ -331,6 +367,10 @@ class EigsepFpga:
     def initialize_fpga(self, verify=False):
         """
         Initialize the correlator.
+
+        Notes
+        -----
+        This is called by `initialize` but can be called separately.
 
         """
         fft_shift = self.cfg["fft_shift"]
@@ -361,6 +401,11 @@ class EigsepFpga:
         """
         Set the input to either noise or ADC based on the configuration.
         This method is called after initializing the ADC and FPGA.
+
+        Notes
+        -----
+        This is called by `initialize`. Can be called separately
+        to change the input after initialization.
         """
         self.noise.set_seed(stream=None, seed=0)
         if self.cfg["use_noise"]:
@@ -385,6 +430,11 @@ class EigsepFpga:
             Keys are "01", "23", and "45". Values (int) are the delay in
             clock cycles. Max 1024 (2^10).
 
+        Notes
+        -----
+        This is called by `initialize_fpga`. Can be called separately
+        to change the delay after initialization.
+
         """
         for key in ["01", "23", "45"]:
             dly = delay.get(key, 0)
@@ -403,6 +453,11 @@ class EigsepFpga:
             Dictionary of attenuation values for each PAM. Keys are antenna
             numbers, values are tuples of (east, north) attenuation values.
 
+        Notes
+        -----
+        This is called by `initialize_fpga`. Can be called separately
+        to change the attenuation after initialization.
+
         """
         attenuation = self.cfg["pam_atten"]
 
@@ -419,6 +474,16 @@ class EigsepFpga:
         self.pams_initialized = True
 
     def synchronize(self, delay=0, update_redis=True):
+        """
+        Synchronize the correlator clock.
+
+        Parameters
+        ----------
+        delay : int
+        update_redis : bool
+            Whether to update Redis with the synchronization time.
+
+        """
         self.sync.set_delay(delay)
         self.sync.arm_sync()
         for i in range(3):

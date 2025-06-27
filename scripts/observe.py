@@ -22,6 +22,19 @@ parser.add_argument(
     help="update redis",
 )
 parser.add_argument(
+    "-w",
+    dest="write_files",
+    action="store_true",
+    default=False,
+    help="Write data to file.",
+)
+parser.add_argument(
+    "--save_dir",
+    dest="save_dir",
+    default=None,
+    help="Directory to save files. Overrides the default in the config file.",
+)
+parser.add_argument(
     "--dummy",
     dest="dummy_mode",
     action="store_true",
@@ -44,23 +57,16 @@ else:
     logger.info(f"Connecting to Eigsep correlator at {snap_ip}")
     fpga = EigsepFpga(cfg=cfg, program=program)
 
-if args.initialize_adc:
-    logger.debug("Initializing ADCs")
-    fpga.initialize_adc()
-
-if args.initialize_fpga:
-    logger.debug("Initializing FPGA")
-    fpga.initialize_fpga()
+# initialize SNAP
+fpga.initialize(
+    initialize_adc=args.initialize_adc,
+    initialize_fpga=args.initialize_fpga,
+    sync=args.sync,
+    update_redis=args.update_redis,
+)
 
 # validate configuration
 fpga.validate_config()
-
-# set input
-fpga.set_input()
-
-# synchronize
-if args.sync:
-    fpga.synchronize(delay=0, update_redis=args.update_redis)
 
 if args.save_dir is None:
     save_dir = cfg["save_dir"]
