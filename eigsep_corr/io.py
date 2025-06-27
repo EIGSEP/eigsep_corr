@@ -43,8 +43,32 @@ DEFAULT_HEADER = {
 }
 
 
-def build_dtype(dtype, endian):
-    return np.dtype(dtype).newbyteorder(endian)
+def build_dtype(dtype, endian=None):
+    """
+    Build a numpy dtype from a tuple of (dtype, endian).
+
+    Parameters
+    ----------
+    dtype : str
+        The data type (e.g., 'int32', 'float64').
+    endian : str
+        The byte order ('>' for big-endian, '<' for little-endian).
+        If None, uses the system default.
+
+    Returns
+    -------
+    dt : np.dtype
+
+    Notes
+    -----
+    It is possible to pass a single string to `dtype` specifying both
+    type and endian (e.g., '>i4' for big-endian int32).
+
+    """
+    dt = np.dtype(dtype)
+    if endian:
+        dt = dt.newbyteorder(endian)
+    return dt
 
 
 def unpack_raw_header(buf, header_size=None):
@@ -53,7 +77,10 @@ def unpack_raw_header(buf, header_size=None):
     else:
         buf = buf[:header_size]
     header = json.loads(buf)  # trim trailing nulls
-    dt = build_dtype(*header["dtype"])
+    if isinstance(header["dtype"], str):
+        dt = build_dtype(header["dtype"])
+    else:
+        dt = build_dtype(*header["dtype"])
     data_start = header_size + HEADER_LEN_BYTES + (8 - (header_size % 8))
     header["header_size"] = header_size
     header["data_start"] = data_start
@@ -63,7 +90,10 @@ def unpack_raw_header(buf, header_size=None):
 
 
 def pack_raw_header(header):
-    dt = build_dtype(*header["dtype"])
+    if isinstance(header["dtype"], str):
+        dt = build_dtype(header["dtype"])
+    else:
+        dt = build_dtype(*header["dtype"])
     # filter to official header keys
     header = {k: v for k, v in header.items() if k in DEFAULT_HEADER}
     header["acc_cnt"] = np.array(header["acc_cnt"], dtype=dt).tolist()
@@ -115,14 +145,20 @@ def read_header(filename):
 
 
 def calc_pair_offsets(pairs, acc_bins, nchan, dtype):
-    dt = build_dtype(*dtype)
+    if isinstance(dtype, str):
+        dt = build_dtype(dtype)
+    else:
+        dt = build_dtype(*dtype)
     nspec = np.array([0] + [1 if len(p) == 1 else 2 for p in pairs])
     offsets = np.cumsum(nspec)
     return offsets * dt.itemsize * acc_bins * nchan
 
 
-def unpack_raw_data(buf, pair, acc_bins=2, nchan=1024, dtype=("int32", ">")):
-    dt = build_dtype(*dtype)
+def unpack_raw_data(buf, pair, acc_bins=2, nchan=1024, dtype=">i4"):
+    if isinstance(dtype, str):
+        dt = build_dtype(dtype)
+    else:
+        dt = build_dtype(*dtype)
     if type(buf) is not bytes:
         buf = b"".join(buf)
     data = np.frombuffer(buf, dtype=dt)
@@ -133,8 +169,11 @@ def unpack_raw_data(buf, pair, acc_bins=2, nchan=1024, dtype=("int32", ">")):
     return data
 
 
-def pack_raw_data(data, dtype=("int32", ">")):
-    dt = build_dtype(*dtype)
+def pack_raw_data(data, dtype=">i4"):
+    if isinstance(dtype, str):
+        dt = build_dtype(dtype)
+    else:
+        dt = build_dtype(*dtype)
     buf = data.astype(dt).tobytes()
     return buf
 
