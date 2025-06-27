@@ -93,6 +93,13 @@ def add_args(parser, default_config_file=default_config_file):
         default=default_config_file,
         help="Configuration file for Eigsep Fpga.",
     )
+    parser.add_argument(
+        "--dummy",
+        dest="dummy_mode",
+        action="store_true",
+        default=False,
+        help="Run with a dummy SNAP interface",
+    )
 
 
 class EigsepFpga:
@@ -480,6 +487,8 @@ class EigsepFpga:
         Parameters
         ----------
         delay : int
+            Dealy in FPGA clock ticks between arrival of an external
+            sync pulse and the issuing of an internal trigger.
         update_redis : bool
             Whether to update Redis with the synchronization time.
 

@@ -34,13 +34,6 @@ parser.add_argument(
     default=None,
     help="Directory to save files. Overrides the default in the config file.",
 )
-parser.add_argument(
-    "--dummy",
-    dest="dummy_mode",
-    action="store_true",
-    default=False,
-    help="Run with a dummy SNAP interface",
-)
 args = parser.parse_args()
 cfg = load_config(args.config_file)
 
