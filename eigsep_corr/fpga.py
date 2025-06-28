@@ -32,13 +32,13 @@ except ImportError:
 from . import io
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync
 from .config import load_config
-from .utils import calc_inttime, get_data_path
+from .utils import calc_inttime, get_config_path, get_data_path
 
 logger = logging.getLogger(__name__)
 if not USE_CASPERFPGA:
     logger.warning("Running without casperfpga installed")
 
-default_config_file = "config.yaml"
+default_config_file = get_config_path("config.yaml")
 default_config = load_config(default_config_file)
 
 
