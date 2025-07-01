@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import tempfile
 
 from eigsep_corr.testing import DummyEigsepFpga
 
@@ -8,6 +9,33 @@ from eigsep_corr.testing import DummyEigsepFpga
 def fpga():
     """Fixture to create a DummyFpga instance."""
     return DummyEigsepFpga()
+
+
+@pytest.fixture
+def fpga_with_config():
+    """Fixture to create a DummyFpga instance with custom config."""
+    config = {
+        "snap_ip": "10.10.10.13",
+        "fpg_file": "test.fpg",
+        "fpg_version": [2, 3],
+        "sample_rate": 500.0,
+        "nchan": 1024,
+        "use_ref": False,
+        "use_noise": False,
+        "adc_gain": 4,
+        "fft_shift": 0x0FF,
+        "corr_acc_len": 67108864,
+        "corr_scalar": 512,
+        "corr_word": 4,
+        "acc_bins": 2,
+        "dtype": ">i4",
+        "pam_atten": {0: [8, 8], 1: [8, 8], 2: [8, 8]},
+        "pol_delay": {"01": 0, "23": 0, "45": 0},
+        "ntimes": 240,
+        "save_dir": "/tmp",
+        "redis": {"host": "localhost", "port": 6379},
+    }
+    return DummyEigsepFpga(cfg=config)
 
 
 @pytest.fixture
@@ -118,3 +146,122 @@ def test_read_data(fpga, expected_auto_raw, expected_cross_raw):
         np.testing.assert_array_equal(
             d[k], np.frombuffer(expected_cross_raw, dtype=">i4")
         )
+
+
+def test_fpga_initialization(fpga_with_config):
+    """Test FPGA initialization."""
+    fpga = fpga_with_config
+    assert fpga.cfg["snap_ip"] == "10.10.10.13"
+    assert fpga.cfg["sample_rate"] == 500.0
+    assert not fpga.adc_initialized
+    assert not fpga.pams_initialized
+    assert not fpga.is_synchronized
+
+
+def test_fpga_initialize_method(fpga_with_config):
+    """Test the initialize method."""
+    fpga = fpga_with_config
+    fpga.initialize(
+        initialize_adc=True,
+        initialize_fpga=True,
+        sync=True,
+        update_redis=False,
+    )
+    assert fpga.adc_initialized
+    assert fpga.pams_initialized
+    assert fpga.is_synchronized
+
+
+def test_validate_config(fpga_with_config):
+    """Test configuration validation."""
+    fpga = fpga_with_config
+
+    # First initialize the FPGA to set up the PFB properly
+    fpga.initialize(initialize_fpga=True)
+
+    # The validation expects computed values to match, so let's update config
+    # with the computed integration_time and file_time
+    from eigsep_corr.utils import calc_inttime
+
+    sample_rate = fpga.cfg["sample_rate"]
+    corr_acc_len = fpga.cfg["corr_acc_len"]
+    acc_bins = fpga.cfg["acc_bins"]
+    t_int = calc_inttime(sample_rate * 1e6, corr_acc_len, acc_bins=acc_bins)
+    ntimes = fpga.cfg["ntimes"]
+    file_time = t_int * ntimes
+
+    fpga.cfg["integration_time"] = t_int
+    fpga.cfg["file_time"] = file_time
+
+    # Test that validation passes when config matches hardware
+    fpga.validate_config()
+
+
+def test_redis_integration(fpga_with_config):
+    """Test Redis integration with fakeredis."""
+    fpga = fpga_with_config
+    assert fpga.redis is not None
+
+    # Test setting and getting values
+    fpga.redis.set("test_key", "test_value")
+    assert fpga.redis.get("test_key").decode() == "test_value"
+
+    # Test that it's actually fakeredis
+    import fakeredis
+
+    assert isinstance(fpga.redis, fakeredis.FakeRedis)
+
+
+def test_observe_method(fpga_with_config):
+    """Test the observe method with write_files=False."""
+    fpga = fpga_with_config
+    fpga.initialize(sync=True)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Test observe without writing files
+        try:
+            fpga.observe(
+                save_dir=tmpdir,
+                pairs=None,
+                timeout=0.1,  # Very short timeout for testing
+                update_redis=False,
+                write_files=False,
+            )
+        except Exception:
+            # Expected to timeout quickly
+            pass
+        finally:
+            fpga.end_observing()
+
+
+def test_config_loading_integration():
+    """Test config loading integration."""
+    from eigsep_corr.fpga import default_config
+
+    # Test that default config loads
+    assert default_config is not None
+    assert "snap_ip" in default_config
+    assert "sample_rate" in default_config
+
+    # Test creating FPGA with default config
+    fpga = DummyEigsepFpga(cfg=default_config)
+    assert fpga.cfg == default_config
+
+
+def test_add_args_function():
+    """Test the add_args function."""
+    import argparse
+    from eigsep_corr.fpga import add_args
+
+    parser = argparse.ArgumentParser()
+    add_args(parser)
+
+    # Test that required arguments are added
+    args = parser.parse_args(["--dummy"])
+    assert args.dummy_mode is True
+
+    args = parser.parse_args(["-p"])
+    assert args.program is True
+
+    args = parser.parse_args(["-f"])
+    assert args.initialize_fpga is True

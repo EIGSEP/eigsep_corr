@@ -35,6 +35,12 @@ class DummyFpga(DummyBlock):
         self.cnt_period = kwargs.pop("cnt_period", 2**28 / (500 * 1e6))
         self.regs = {}
         self.regs["version_version"] = 0x20003
+        self.regs["corr_acc_len"] = kwargs.get("corr_acc_len", 67108864)
+        self.regs["corr_scalar"] = kwargs.get("corr_scalar", 512)
+        self.regs["fft_shift"] = kwargs.get("fft_shift", 0x0FF)
+        self.regs["pfb_pol01_delay"] = 0
+        self.regs["pfb_pol23_delay"] = 0
+        self.regs["pfb_pol45_delay"] = 0
 
     def upload_to_ram_and_program(self, fpg_file, force=False):
         pass
@@ -155,6 +161,9 @@ class DummyEigsepFpga(EigsepFpga):
             snap_ip=self.cfg["snap_ip"],
             transport=None,
             cnt_period=cnt_period,
+            corr_acc_len=corr_acc_len,
+            corr_scalar=self.cfg["corr_scalar"],
+            fft_shift=self.cfg["fft_shift"],
         )
         if program:
             force = program == "force"
