@@ -1,8 +1,7 @@
 import redis
 from eigsep_corr.plot import plot_live
 
-#REDIS_HOST = "10.10.10.10"
-REDIS_HOST = "192.168.10.83"
+REDIS_HOST = "10.10.10.10"
 REDIS_PORT = 6379
 AUTOS = ["0", "1", "2", "3", "4", "5"]
 #pairs = ["2", "3"]
