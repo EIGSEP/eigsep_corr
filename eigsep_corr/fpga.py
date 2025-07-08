@@ -131,9 +131,9 @@ class EigsepFpga:
 
         fpg_file = Path(self.cfg["fpg_file"])
         if not fpg_file.is_absolute():
-            self.fpg_file = get_data_path(fname=fpg_file)
+            self.fpg_file = str(get_data_path(fname=fpg_file))
         else:
-            self.fpg_file = fpg_file
+            self.fpg_file = str(fpg_file)
 
         self.fpga = casperfpga.CasperFpga(
             self.cfg["snap_ip"], transport=TapcpTransport
