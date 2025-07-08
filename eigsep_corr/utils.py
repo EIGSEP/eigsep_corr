@@ -1,6 +1,48 @@
-"""Utility functions for EIGSEP"""
-
+from importlib import resources
 import numpy as np
+
+
+def get_path(dirname=None, fname=None):
+    """
+    Get the path to a directory or file within the package.
+    Default returns path to the package, <pkg_path>.
+    If `dirname` is provided, return path to <pkg_path>/<dirname>.
+    If `fname` is provided, return the full path to that file.
+
+    Parameters
+    ----------
+    dirname : str or Path
+        Name of the directory within the package.
+    fname : str or Path
+        Name of the file within the package or directory.
+
+    Returns
+    -------
+    Path
+        The path to the specified directory or file within the package.
+    """
+    path = resources.files(__package__)
+    if dirname is not None:
+        path = path.joinpath(dirname)
+    if fname is not None:
+        path = path.joinpath(fname)
+    return path
+
+
+def get_data_path(fname=None):
+    """
+    Get the path to the data directory within the package.
+    If `fname` is provided, return the full path to that file.
+    """
+    return get_path(dirname="data", fname=fname)
+
+
+def get_config_path(fname=None):
+    """
+    Get the path to the configuration directory within the package.
+    If `fname` is provided, return the full path to that file.
+    """
+    return get_path(dirname="config", fname=fname)
 
 
 def calc_freqs_dfreq(sample_rate_Hz, nchan):

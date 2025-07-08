@@ -3,6 +3,7 @@ import numpy as np
 import struct
 import socket
 import time
+
 try:
     from casperfpga import i2c
     from casperfpga import i2c_gpio
@@ -12,7 +13,7 @@ try:
     from casperfpga import i2c_bar
     from casperfpga import i2c_motion
     from casperfpga import i2c_temp
-except(ImportError):
+except ImportError:
     logging.warning("Running without casperfpga installed")
 
 # There are so many I2C warnings that a new level is defined

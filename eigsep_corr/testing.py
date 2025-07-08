@@ -1,29 +1,28 @@
 import time
-import datetime
 import logging
-import redis
 from math import floor
 
-from .fpga import EigsepFpga
-from .fpga import SNAP_IP, FPG_FILE
-from .fpga import NCHAN, CORR_ACC_LEN, SAMPLE_RATE
-from .fpga import REDIS_HOST, REDIS_PORT
+import fakeredis
+
+from .fpga import EigsepFpga, default_config
+
+logger = logging.getLogger(__name__)
 
 
-class DummyBlock(object):
-    def __init__(self, fpga, attrs=[]):
+class DummyBlock:
+    def __init__(self, fpga):
         self.fpga = fpga
-        for attr in attrs:
-            self.fpga.regs[attr] = None
-        self._attributes = {}
 
     def init(self, *args, **kwargs):
+        pass
+
+    def initialize(self, *args, **kwargs):
         pass
 
     def __getattribute__(self, attr):
         try:
             return object.__getattribute__(self, attr)
-        except(AttributeError):
+        except AttributeError:
             return self
 
     def __call__(self, *args, **kwargs):
@@ -31,17 +30,27 @@ class DummyBlock(object):
 
 
 class DummyFpga(DummyBlock):
-    def __init__(self, regs, **kwargs):
+    def __init__(self, **kwargs):
         self.sync_time = None
-        self.cnt_period = CORR_ACC_LEN / (SAMPLE_RATE * 1e6)
-        self.regs = {r: None for r in regs}
-        self.regs['version_version'] = 0x20002
+        self.cnt_period = kwargs.pop("cnt_period", 2**28 / (500 * 1e6))
+        self.regs = {}
+        self.regs["version_version"] = 0x20003
+        self.regs["corr_acc_len"] = kwargs.get("corr_acc_len", 67108864)
+        self.regs["corr_scalar"] = kwargs.get("corr_scalar", 512)
+        self.regs["fft_shift"] = kwargs.get("fft_shift", 0x0FF)
+        self.regs["pfb_pol01_delay"] = 0
+        self.regs["pfb_pol23_delay"] = 0
+        self.regs["pfb_pol45_delay"] = 0
+
+    def upload_to_ram_and_program(self, fpg_file, force=False):
+        pass
 
     def write_int(self, reg, val):
+        logger.debug(f"Writing {val} to {reg}")
         self.regs[reg] = val
 
     def read_int(self, reg):
-        if reg == 'corr_acc_cnt':
+        if reg == "corr_acc_cnt":
             acc_cnt = (time.time() - self.sync_time) / self.cnt_period
             acc_cnt = int(floor(acc_cnt))
             return acc_cnt
@@ -54,65 +63,145 @@ class DummyFpga(DummyBlock):
         return b"\x12" * nbytes
 
 
+class DummyAdcAdc:
+
+    def selectInput(self, inp):
+        pass
+
+
+class DummyAdc(DummyBlock):
+
+    def __init__(self, fpga, num_chans=2, resolution=8, ref=None):
+        super().__init__(fpga)
+
+    def init(self, sample_rate=500):
+        self.adc = DummyAdcAdc()
+
+    def alignLineClock(self):
+        return []
+
+    def alignFrameClock(self):
+        return []
+
+    def rampTest(self):
+        return []
+
+    def selectAdc(self):
+        pass
+
+    def set_gain(self, gain):
+        pass
+
+
+class DummyPfb(DummyBlock):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fft_shift = None
+
+    def set_fft_shift(self, fft_shift):
+        self.fft_shift = fft_shift
+
+    def get_fft_shift(self):
+        return self.fft_shift
+
+
+class DummyPam(DummyBlock):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.attenuation = (0, 0)
+
+    def set_attenuation(self, att_e, att_n):
+        self.attenuation = (att_e, att_n)
+
+    def get_attenuation(self):
+        return self.attenuation
+
+
+class DummySync(DummyBlock):
+
+    def set_delay(self, delay):
+        pass
+
+    def arm_sync(self):
+        pass
+
+    def arm_noise(self):
+        pass
+
+    def sw_sync(self):
+        self.fpga.sync_time = time.time()
+
+
+class DummyNoise(DummyBlock):
+
+    def set_seed(self, stream=None, seed=0):
+        pass
+
+
+class DummyInput(DummyBlock):
+
+    def use_noise(self, stream=None):
+        pass
+
+    def use_adc(self, stream=None):
+        pass
+
+
 class DummyEigsepFpga(EigsepFpga):
-    def __init__(
-        self,
-        snap_ip=SNAP_IP,
-        fpg_file=FPG_FILE,
-        program=False,
-        ref=None,
-        transport=None,
-        logger=None,
-        sample_rate=SAMPLE_RATE,
-        nchan=NCHAN,
-        acc_len=CORR_ACC_LEN,
-        **kwargs,
-    ):
-        if logger is None:
-            logger = logging.getLogger(__name__)
+    def __init__(self, cfg=default_config, program=False):
         self.logger = logger
+        self.cfg = cfg
 
-        self.fpg_file = fpg_file
-        self.fpga = DummyFpga([], snap_ip=snap_ip, transport=transport)
+        self.fpg_file = self.cfg["fpg_file"]
+        corr_acc_len = self.cfg["corr_acc_len"]
+        sample_rate = self.cfg["sample_rate"]
+        cnt_period = corr_acc_len / (sample_rate * 1e6)
+        self.fpga = DummyFpga(
+            snap_ip=self.cfg["snap_ip"],
+            transport=None,
+            cnt_period=cnt_period,
+            corr_acc_len=corr_acc_len,
+            corr_scalar=self.cfg["corr_scalar"],
+            fft_shift=self.cfg["fft_shift"],
+        )
+        if program:
+            force = program == "force"
+            self.fpga.upload_to_ram_and_program(self.fpg_file, force=force)
 
-        self.adc = DummyBlock(self.fpga)
-        self.sync = DummyBlock(self.fpga)
-        self.noise = DummyBlock(self.fpga)
-        self.inp = DummyBlock(self.fpga)
-        self.pfb = DummyBlock(self.fpga)
+        if cfg["use_ref"]:
+            ref = 10
+        else:
+            ref = None
+
+        self.logger.debug("Adding dummy blocks to FPGA")
+        self.adc = DummyAdc(self.fpga, ref=ref)
+        self.sync = DummySync(self.fpga)
+        self.noise = DummyNoise(self.fpga)
+        self.inp = DummyInput(self.fpga)
+        self.pfb = DummyPfb(self.fpga)
         self.blocks = [self.sync, self.noise, self.inp, self.pfb]
 
         self.autos = ["0", "1", "2", "3", "4", "5"]
         self.crosses = ["02", "13", "24", "35", "04", "15"]
 
-        self.redis = redis.Redis(REDIS_HOST, port=REDIS_PORT)
+        self.logger.debug("Initializing dummy Redis")
+        self.redis = fakeredis.FakeRedis()
 
         self.adc_initialized = False
         self.pams_initialized = False
         self.is_synchronized = False
 
-        self.sample_rate = sample_rate
-        self.nchan = nchan
-        self.acc_len = acc_len
-
-        self.file = None
-
-    def initialize_adc(self, *args, **kwargs):
-        self.adc_initialized = True
-
-    def initialize_pams(self, *args, **kwargs):
-        self.pams = [DummyBlock(self.fpga), DummyBlock(self.fpga), DummyBlock(self.fpga)]
-        self.pams_initialized = True
-
-    def initialize_fems(self, *args, **kwargs):
-        self.fems_initialized = True
-
-    def synchronize(self, delay=0, update_redis=True):
-        self.fpga.sync_time = self.sync_time = time.time()
-        if update_redis:
-            self.redis.set("SYNC_TIME", str(self.sync_time))
-            self.redis.set(
-                "SYNC_DATE",
-                datetime.datetime.fromtimestamp(self.sync_time).isoformat(),
+    def initialize_pams(self):
+        attenuation = self.cfg["pam_atten"]
+        self.pams = []
+        for p, (att_e, att_n) in attenuation.items():
+            pam = DummyPam(self.fpga)
+            pam.initialize()
+            self.logger.info(
+                f"Setting pam{p} attenuation to ({att_e}, {att_n})"
             )
-        self.is_synchronized = True
+            pam.set_attenuation(att_e, att_n)
+            self.pams.append(pam)
+        self.blocks.extend(self.pams)
+        self.pams_initialized = True
