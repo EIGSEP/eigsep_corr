@@ -13,7 +13,7 @@ def load_config(name, compute_inttime=True):
     name : str or Path
         Path to the configuration file.
     compute_inttime : bool
-        Compute integration time and file time if True.
+        Compute integration time if True.
 
     Returns
     -------
@@ -33,8 +33,5 @@ def load_config(name, compute_inttime=True):
             corr_acc_len,
             acc_bins=acc_bins,
         )
-        ntimes = config["ntimes"]
-        file_time = t_int * ntimes
         config["integration_time"] = t_int
-        config["file_time"] = file_time
     return config
