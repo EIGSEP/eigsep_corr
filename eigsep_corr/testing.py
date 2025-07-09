@@ -152,6 +152,7 @@ class DummyEigsepFpga(EigsepFpga):
     def __init__(self, cfg=default_config, program=False):
         self.logger = logger
         self.cfg = cfg
+        self.pairs = cfg["pairs"]
 
         self.fpg_file = self.cfg["fpg_file"]
         corr_acc_len = self.cfg["corr_acc_len"]
