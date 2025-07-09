@@ -29,10 +29,10 @@ except ImportError:
     USE_CASPERFPGA = False
     TapcpTransport = None
 
-from . import io
-from .blocks import Input, NoiseGen, Pam, Pfb, Sync
-from .config import load_config
-from .utils import calc_inttime, get_config_path, get_data_path
+from . import io  # noqa: E402
+from .blocks import Input, NoiseGen, Pam, Pfb, Sync  # noqa: E402
+from .config import load_config  # noqa: E402
+from .utils import calc_inttime, get_config_path, get_data_path  # noqa: E402
 
 logger = logging.getLogger(__name__)
 if not USE_CASPERFPGA:
@@ -243,7 +243,6 @@ class EigsepFpga:
             "corr_word": self.cfg["corr_word"],
             "acc_bins": acc_bins,
             "dtype": self.cfg["dtype"],
-            "pam_atten": pam_atten,
             "pol_delay": {
                 "01": self.fpga.read_uint("pfb_pol01_delay"),
                 "23": self.fpga.read_uint("pfb_pol23_delay"),
@@ -494,8 +493,6 @@ class EigsepFpga:
         This is called by `initialize_fpga`.
 
         """
-        attenuation = self.cfg["pam_atten"]
-
         self.pams = []
         for num in range(3):
             pam = Pam(self.fpga, f"i2c_pam{num}")
