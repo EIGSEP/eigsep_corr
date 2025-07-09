@@ -212,9 +212,10 @@ class EigsepFpga:
             adc_gain = self.cfg["adc_gain"]
         rf_chain = self.cfg["rf_chain"].copy()
         if self.pams_initialized:  # update PAM attenuation
-            for ant in rf_chain:
-                ant_cfg = rf_chain[ant]
-                atten = self.pams[ant].get_attenuation()
+            for ant in rf_chain["ants"]:
+                ant_cfg = rf_chain["ants"][ant]
+                num = ant_cfg["pam"]["num"]
+                atten = self.pams[num].get_attenuation()
                 ant_cfg["pam"]["atten"] = atten
         if self.is_synchronized:
             sync_time = self.sync_time
@@ -268,7 +269,7 @@ class EigsepFpga:
             numbers as values.
 
         """
-        return {ant: ant["snap"]["input"] for ant in self.cfg["rf_chain"]}
+        return {ant: ant["snap"]["input"] for ant in self.cfg["rf_chain"]["ants"]}
 
     def validate_config(self):
         """
@@ -501,8 +502,8 @@ class EigsepFpga:
         self.blocks.extend(self.pams)
         self.pams_initialized = True
 
-        for ant in self.cfg["rf_chain"]:
-            atten = self.cfg["rf_chain"][ant]["pam"]["atten"]
+        for ant in self.cfg["rf_chain"]["ants"]:
+            atten = self.cfg["rf_chain"]["ants"][ant]["pam"]["atten"]
             self.logger.info(f"Setting PAM attenuation for {ant} to {atten}")
             self.set_pam_atten(ant, atten)
 
@@ -530,11 +531,11 @@ class EigsepFpga:
         """
         if not self.pams_initialized:
             raise RuntimeError("PAMs not initialized.")
-        num = self.cfg["rf_chain"][ant]["pam"]["num"]
+        num = self.cfg["rf_chain"]["ants"][ant]["pam"]["num"]
         pam = self.pams[num]
         atten_e, atten_n = pam.get_attenuation()
         atten = {"E": atten_e, "N": atten_n}
-        update_pol = self.cfg["rf_chain"][ant]["pam"]["pol"]
+        update_pol = self.cfg["rf_chain"]["ants"][ant]["pam"]["pol"]
         atten[update_pol] = attenuation
         pam.set_attenuation(atten["E"], atten["N"], verify=True)
 
