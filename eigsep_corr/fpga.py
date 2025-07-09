@@ -496,7 +496,7 @@ class EigsepFpga:
         """
         self.pams = []
         for num in range(3):
-            pam = Pam(self.fpga, f"i2c_pam{num}")
+            pam = Pam(self.fpga, f"i2c_ant{num}")
             pam.initialize()
             self.pams.append(pam)
         self.blocks.extend(self.pams)
