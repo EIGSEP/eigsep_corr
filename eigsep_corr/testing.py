@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class DummyBlock:
-    def __init__(self, fpga):
+    def __init__(self, fpga, *args, **kwargs):
         self.fpga = fpga
 
     def init(self, *args, **kwargs):
@@ -111,8 +111,13 @@ class DummyPam(DummyBlock):
         super().__init__(*args, **kwargs)
         self.attenuation = (0, 0)
 
-    def set_attenuation(self, att_e, att_n):
+    def initialize(self):
+        pass
+
+    def set_attenuation(self, att_e, att_n, verify=True):
         self.attenuation = (att_e, att_n)
+        if verify:
+            assert (att_e, att_n) == self.get_attenuation()
 
     def get_attenuation(self):
         return self.attenuation
@@ -192,17 +197,3 @@ class DummyEigsepFpga(EigsepFpga):
         self.adc_initialized = False
         self.pams_initialized = False
         self.is_synchronized = False
-
-    def initialize_pams(self):
-        attenuation = self.cfg["pam_atten"]
-        self.pams = []
-        for p, (att_e, att_n) in attenuation.items():
-            pam = DummyPam(self.fpga)
-            pam.initialize()
-            self.logger.info(
-                f"Setting pam{p} attenuation to ({att_e}, {att_n})"
-            )
-            pam.set_attenuation(att_e, att_n)
-            self.pams.append(pam)
-        self.blocks.extend(self.pams)
-        self.pams_initialized = True

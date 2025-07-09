@@ -2,40 +2,14 @@ import numpy as np
 import pytest
 import tempfile
 
-from eigsep_corr.testing import DummyEigsepFpga
+import eigsep_corr.fpga
+from eigsep_corr.testing import DummyEigsepFpga, DummyPam
 
 
 @pytest.fixture
 def fpga():
     """Fixture to create a DummyFpga instance."""
     return DummyEigsepFpga()
-
-
-@pytest.fixture
-def fpga_with_config():
-    """Fixture to create a DummyFpga instance with custom config."""
-    config = {
-        "snap_ip": "10.10.10.13",
-        "fpg_file": "test.fpg",
-        "fpg_version": [2, 3],
-        "sample_rate": 500.0,
-        "nchan": 1024,
-        "use_ref": False,
-        "use_noise": False,
-        "adc_gain": 4,
-        "fft_shift": 0x0FF,
-        "corr_acc_len": 67108864,
-        "corr_scalar": 512,
-        "corr_word": 4,
-        "acc_bins": 2,
-        "dtype": ">i4",
-        "pam_atten": {0: [8, 8], 1: [8, 8], 2: [8, 8]},
-        "pol_delay": {"01": 0, "23": 0, "45": 0},
-        "ntimes": 240,
-        "save_dir": "/tmp",
-        "redis": {"host": "localhost", "port": 6379},
-    }
-    return DummyEigsepFpga(cfg=config)
 
 
 @pytest.fixture
@@ -148,19 +122,18 @@ def test_read_data(fpga, expected_auto_raw, expected_cross_raw):
         )
 
 
-def test_fpga_initialization(fpga_with_config):
+def test_fpga_initialization(fpga):
     """Test FPGA initialization."""
-    fpga = fpga_with_config
-    assert fpga.cfg["snap_ip"] == "10.10.10.13"
+    assert fpga.cfg["snap_ip"] == "10.10.10.12"
     assert fpga.cfg["sample_rate"] == 500.0
     assert not fpga.adc_initialized
     assert not fpga.pams_initialized
     assert not fpga.is_synchronized
 
 
-def test_fpga_initialize_method(fpga_with_config):
+def test_fpga_initialize_method(monkeypatch, fpga):
     """Test the initialize method."""
-    fpga = fpga_with_config
+    monkeypatch.setattr(eigsep_corr.fpga, "Pam", DummyPam)
     fpga.initialize(
         initialize_adc=True,
         initialize_fpga=True,
@@ -172,10 +145,10 @@ def test_fpga_initialize_method(fpga_with_config):
     assert fpga.is_synchronized
 
 
-def test_validate_config(fpga_with_config):
+def test_validate_config(monkeypatch, fpga):
     """Test configuration validation."""
-    fpga = fpga_with_config
 
+    monkeypatch.setattr(eigsep_corr.fpga, "Pam", DummyPam)
     # First initialize the FPGA to set up the PFB properly
     fpga.initialize(initialize_fpga=True)
 
@@ -187,19 +160,15 @@ def test_validate_config(fpga_with_config):
     corr_acc_len = fpga.cfg["corr_acc_len"]
     acc_bins = fpga.cfg["acc_bins"]
     t_int = calc_inttime(sample_rate * 1e6, corr_acc_len, acc_bins=acc_bins)
-    ntimes = fpga.cfg["ntimes"]
-    file_time = t_int * ntimes
 
     fpga.cfg["integration_time"] = t_int
-    fpga.cfg["file_time"] = file_time
 
     # Test that validation passes when config matches hardware
     fpga.validate_config()
 
 
-def test_redis_integration(fpga_with_config):
+def test_redis_integration(fpga):
     """Test Redis integration with fakeredis."""
-    fpga = fpga_with_config
     assert fpga.redis is not None
 
     # Test setting and getting values
@@ -213,9 +182,8 @@ def test_redis_integration(fpga_with_config):
 
 
 @pytest.mark.skip("Skipping test for now due to timeout issues.")
-def test_observe_method(fpga_with_config):
+def test_observe_method(fpga):
     """Test the observe method with write_files=False."""
-    fpga = fpga_with_config
     fpga.initialize(sync=True)
 
     with tempfile.TemporaryDirectory() as tmpdir:
