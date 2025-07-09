@@ -213,10 +213,15 @@ class EigsepFpga:
         rf_chain = self.cfg["rf_chain"].copy()
         if self.pams_initialized:  # update PAM attenuation
             for ant in rf_chain["ants"]:
-                ant_cfg = rf_chain["ants"][ant]
-                num = ant_cfg["pam"]["num"]
-                atten = self.pams[num].get_attenuation()
-                ant_cfg["pam"]["atten"] = atten
+                try:
+                    atten = self.get_pam_atten(ant)
+                except Exception as e:
+                    self.logger.warning(
+                        f"Error getting PAM attenuation for {ant}: {e}"
+                    )
+                    self.pams_initialized = False
+                    break
+                rf_chain["ants"][ant]["pam"]["atten"] = atten
         if self.is_synchronized:
             sync_time = self.sync_time
         else:
@@ -269,7 +274,9 @@ class EigsepFpga:
             numbers as values.
 
         """
-        return {ant: ant["snap"]["input"] for ant in self.cfg["rf_chain"]["ants"]}
+        return {
+            ant: ant["snap"]["input"] for ant in self.cfg["rf_chain"]["ants"]
+        }
 
     def validate_config(self):
         """
@@ -538,6 +545,30 @@ class EigsepFpga:
         update_pol = self.cfg["rf_chain"]["ants"][ant]["pam"]["pol"]
         atten[update_pol] = attenuation
         pam.set_attenuation(atten["E"], atten["N"], verify=True)
+
+    def get_pam_atten(self, ant):
+        """
+        Get the attenuation for a PAM.
+
+        Parameters
+        ----------
+        ant : str
+            Antenna identifier. See `self.antennas` for valid values.
+
+        Returns
+        -------
+        int
+            Attenuation value in dB for the specified antenna.
+
+        """
+        if not self.pams_initialized:
+            raise RuntimeError("PAMs not initialized.")
+        num = self.cfg["rf_chain"]["ants"][ant]["pam"]["num"]
+        pam = self.pams[num]
+        atten_e, atten_n = pam.get_attenuation()
+        atten = {"E": atten_e, "N": atten_n}
+        pol = self.cfg["rf_chain"]["ants"][ant]["pam"]["pol"]
+        return atten[pol]
 
     def set_pam_atten_all(self, attenuation):
         """
