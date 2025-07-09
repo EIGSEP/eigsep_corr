@@ -124,9 +124,7 @@ class EigsepFpga:
         self.cfg = cfg
         self.pairs = cfg["pairs"]
         self.autos = [p for p in self.pairs if len(p) == 1]
-        self.crosses = [
-            p for p in self.pairs if len(p) == 2
-        ]
+        self.crosses = [p for p in self.pairs if len(p) == 2]
 
         # redis instance
         rcfg = self.cfg["redis"]
@@ -212,13 +210,12 @@ class EigsepFpga:
         else:
             sample_rate = self.cfg["sample_rate"]
             adc_gain = self.cfg["adc_gain"]
-        if self.pams_initialized:
-            pam_atten = {
-                int(i): list(p.get_attenuation())
-                for i, p in enumerate(self.pams)
-            }
-        else:
-            pam_atten = self.cfg["pam_atten"]
+        rf_chain = self.cfg["rf_chain"].copy()
+        if self.pams_initialized:  # update PAM attenuation
+            for ant in rf_chain:
+                ant_cfg = rf_chain[ant]
+                atten = self.pams[ant].get_attenuation()
+                ant_cfg["pam"]["atten"] = atten
         if self.is_synchronized:
             sync_time = self.sync_time
         else:
@@ -231,8 +228,6 @@ class EigsepFpga:
             corr_acc_len,
             acc_bins=acc_bins,
         )
-        ntimes = self.cfg["ntimes"]
-        file_time = t_int * ntimes
         m = {
             "snap_ip": self.cfg["snap_ip"],
             "fpg_file": str(self.fpg_file),
@@ -254,13 +249,27 @@ class EigsepFpga:
                 "23": self.fpga.read_uint("pfb_pol23_delay"),
                 "45": self.fpga.read_uint("pfb_pol45_delay"),
             },
-            "ntimes": ntimes,
             "redis": self.cfg["redis"],
             "sync_time": sync_time,
             "integration_time": t_int,
-            "file_time": file_time,
+            "rf_chain": rf_chain,
         }
         return m
+
+    @property
+    def antennas(self):
+        """
+        Get the list of antennas from the configuration, with their
+        digital input numbers.
+
+        Returns
+        -------
+        dict
+            Dictionary with antenna names as keys and their digital input
+            numbers as values.
+
+        """
+        return {ant: ant["snap"]["input"] for ant in self.cfg["rf_chain"]}
 
     def validate_config(self):
         """
@@ -480,31 +489,77 @@ class EigsepFpga:
         """
         Initialize the PAMs.
 
-        Parameters
-        ----------
-        attenuation : dict
-            Dictionary of attenuation values for each PAM. Keys are antenna
-            numbers, values are tuples of (east, north) attenuation values.
-
         Notes
         -----
-        This is called by `initialize_fpga`. Can be called separately
-        to change the attenuation after initialization.
+        This is called by `initialize_fpga`.
 
         """
         attenuation = self.cfg["pam_atten"]
 
         self.pams = []
-        for p, (att_e, att_n) in attenuation.items():
-            pam = Pam(self.fpga, f"i2c_ant{p}")
+        for num in range(3):
+            pam = Pam(self.fpga, f"i2c_pam{num}")
             pam.initialize()
-            self.logger.info(
-                f"Setting pam{p} attenuation to ({att_e},{att_n})"
-            )
-            pam.set_attenuation(att_e, att_n)
             self.pams.append(pam)
         self.blocks.extend(self.pams)
         self.pams_initialized = True
+
+        for ant in self.cfg["rf_chain"]:
+            atten = self.cfg["rf_chain"][ant]["pam"]["atten"]
+            self.logger.info(f"Setting PAM attenuation for {ant} to {atten}")
+            self.set_pam_atten(ant, atten)
+
+    def set_pam_atten(self, ant, attenuation):
+        """
+        Set the attenuation for the PAMs.
+
+        Parameters
+        ----------
+        ant : str
+            Antenna identifier. See `self.antennas` for valid values.
+        attenuation : int
+            Attenuation value in dB to set for the PAM. Must be 0-15.
+
+        Raises
+        ------
+        RuntimeError
+            If PAMs are not initialized.
+
+        Notes
+        -----
+        This is called by `initialize_pams`. Can be called separately
+        to change the attenuation after initialization.
+
+        """
+        if not self.pams_initialized:
+            raise RuntimeError("PAMs not initialized.")
+        num = self.cfg["rf_chain"][ant]["pam"]["num"]
+        pam = self.pams[num]
+        atten_e, atten_n = pam.get_attenuation()
+        atten = {"E": atten_e, "N": atten_n}
+        update_pol = self.cfg["rf_chain"][ant]["pam"]["pol"]
+        atten[update_pol] = attenuation
+        pam.set_attenuation(atten["E"], atten["N"], verify=True)
+
+    def set_pam_atten_all(self, attenuation):
+        """
+        Set the attenuation for all PAMs.
+
+        Parameters
+        ----------
+        attenuation : int
+            Attenuation value in dB to set for all PAMs. Must be 0-15.
+
+        Raises
+        ------
+        RuntimeError
+            If PAMs are not initialized.
+
+        """
+        if not self.pams_initialized:
+            raise RuntimeError("PAMs not initialized.")
+        for pam in self.pams:
+            pam.set_attenuation(attenuation, attenuation, verify=True)
 
     def synchronize(self, delay=0, update_redis=True):
         """
@@ -765,6 +820,7 @@ class EigsepFpga:
         timeout=10,
         update_redis=True,
         write_files=True,
+        ntimes=io.DEFAULT_NTIMES,
         header=io.DEFAULT_HEADER,
     ):
         """
@@ -791,7 +847,6 @@ class EigsepFpga:
         self.file = None
         self.queue = Queue(maxsize=0)  # XXX infinite size
         self.event = Event()
-        ntimes = self.cfg["ntimes"]
         if pairs is None:
             pairs = self.pairs
 
