@@ -122,8 +122,11 @@ class EigsepFpga:
         self.logger = logger
         self.logger.debug("Initializing EigsepFpga")
         self.cfg = cfg
-        self.autos = ["0", "1", "2", "3", "4", "5"]
-        self.crosses = ["02", "13", "24", "35", "04", "15"]
+        self.pairs = cfg["pairs"]
+        self.autos = [p for p in self.pairs if len(p) == 1]
+        self.crosses = [
+            p for p in self.pairs if len(p) == 2
+        ]
 
         # redis instance
         rcfg = self.cfg["redis"]
@@ -678,7 +681,7 @@ class EigsepFpga:
         """
         data = {}
         if pairs is None:
-            pairs = self.autos + self.crosses
+            pairs = self.pairs
         elif type(pairs) is str:
             pairs = [pairs]
         data = self.read_auto([p for p in pairs if len(p) == 1], unpack=unpack)
@@ -791,7 +794,7 @@ class EigsepFpga:
         self.event = Event()
         ntimes = self.cfg["ntimes"]
         if pairs is None:
-            pairs = self.autos + self.crosses
+            pairs = self.pairs
 
         self.logger.debug("Start reading integrations.")
         thd = Thread(
