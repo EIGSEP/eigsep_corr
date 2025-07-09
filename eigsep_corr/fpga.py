@@ -831,5 +831,6 @@ class EigsepFpga:
                 self.logger.info("Writing short final file.")
                 self.file.corr_write()
 
-        thd.join()
+        self.event.set()
+        thd.join(timeout=1)
         self.logger.info("Done observing.")
