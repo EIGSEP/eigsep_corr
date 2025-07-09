@@ -31,8 +31,8 @@ parser.add_argument(
 parser.add_argument(
     "--save_dir",
     dest="save_dir",
-    default=None,
-    help="Directory to save files. Overrides the default in the config file.",
+    default="/media/eigsep/T7/data",
+    help="Directory to save files.",
 )
 args = parser.parse_args()
 cfg = load_config(args.config_file)
@@ -61,11 +61,8 @@ fpga.initialize(
 # validate configuration
 fpga.validate_config()
 
-if args.save_dir is None:
-    save_dir = cfg["save_dir"]
-else:
-    logger.info(f"Using save directory: {args.save_dir}")
-    save_dir = args.save_dir
+save_dir = args.save_dir
+logger.info(f"Using save directory: {save_dir}")
 
 logger.info("Observing.")
 try:

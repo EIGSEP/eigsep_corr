@@ -22,7 +22,6 @@ pol_delay:
   "23": 0
   "45": 0
 ntimes: 240  # number of times per file
-save_dir: "/media/eigsep/T7/data"
 redis:
   host: "localhost"
   port: 6379

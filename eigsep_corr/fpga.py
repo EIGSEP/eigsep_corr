@@ -255,7 +255,6 @@ class EigsepFpga:
                 "45": self.fpga.read_uint("pfb_pol45_delay"),
             },
             "ntimes": ntimes,
-            "save_dir": self.cfg["save_dir"],
             "redis": self.cfg["redis"],
             "sync_time": sync_time,
             "integration_time": t_int,
