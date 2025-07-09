@@ -13,7 +13,10 @@ parser = argparse.ArgumentParser(
     description="Eigsep Correlator",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-add_args(parser)
+add_args(
+    parser,
+    default_config_file="/home/eigsep/eigsep/eigsep_corr/configs/config.yaml",
+)
 parser.add_argument(
     "-r",
     dest="update_redis",
