@@ -15,7 +15,9 @@ parser = argparse.ArgumentParser(
 )
 add_args(
     parser,
-    default_config_file="/home/eigsep/eigsep/eigsep_corr/configs/config.yaml",
+    default_config_file=(
+        "/home/eigsep/eigsep/eigsep_corr/eigsep_corr/config/config.yaml"
+    ),
 )
 parser.add_argument(
     "-r",
