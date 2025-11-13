@@ -104,7 +104,7 @@ def add_args(parser, default_config_file=default_config_file):
 
 class EigsepFpga:
 
-    def __init__(self, cfg=default_config, program=False):
+    def __init__(self, cfg=default_config, program=False, **kwargs):
         """
         Class for interfacing with the SNAP board.
 
@@ -117,10 +117,22 @@ class EigsepFpga:
             Whether to program the SNAP with the fpg file. Options are
             True (program if fpg_file is different from the one in
             flash), False (do not program), 'force' (always program).
+        **kwargs
+            Updates to the configuration dictionary.
 
         """
         self.logger = logger
         self.logger.debug("Initializing EigsepFpga")
+
+        # update config with kwargs
+        cfg = cfg.copy()
+        for k, v in kwargs.items():
+            if k in cfg:
+                cfg[k] = v
+                self.logger.debug(f"Overriding config: {k}={v}")
+            else:
+                raise KeyError(f"Invalid config key: {k}")
+
         self.cfg = cfg
         self.pairs = cfg["pairs"]
         self.autos = [p for p in self.pairs if len(p) == 1]
