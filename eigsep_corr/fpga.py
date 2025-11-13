@@ -10,15 +10,15 @@ The important bit widths are:
 Affecting the signal level are the FFT_SHIFT (0b00001010101) and the
 CORR_SCALAR (18_8).
 """
-
+from copy import deepcopy
 import datetime
 import logging
-import numpy as np
 from pathlib import Path
 from queue import Queue
 import time
 from threading import Event, Thread
 
+import numpy as np
 import redis
 
 USE_CASPERFPGA = True
@@ -118,14 +118,16 @@ class EigsepFpga:
             True (program if fpg_file is different from the one in
             flash), False (do not program), 'force' (always program).
         **kwargs
-            Updates to the configuration dictionary.
+            Updates to the configuration dictionary. This can only be
+            used to update existing top-level keys in the config
+            dictionary.
 
         """
         self.logger = logger
         self.logger.debug("Initializing EigsepFpga")
 
         # update config with kwargs
-        cfg = cfg.copy()
+        cfg = deepcopy(cfg)
         for k, v in kwargs.items():
             if k in cfg:
                 cfg[k] = v
