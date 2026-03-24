@@ -11,13 +11,12 @@ Affecting the signal level are the FFT_SHIFT (0b00001010101) and the
 CORR_SCALAR (18_8).
 """
 
+from copy import deepcopy
 import datetime
 import logging
 import numpy as np
 from pathlib import Path
-from queue import Queue
 import time
-from threading import Event, Thread
 
 import redis
 
@@ -29,7 +28,6 @@ except ImportError:
     USE_CASPERFPGA = False
     TapcpTransport = None
 
-from . import io  # noqa: E402
 from .blocks import Input, NoiseGen, Pam, Pfb, Sync  # noqa: E402
 from .config import load_config  # noqa: E402
 from .utils import calc_inttime, get_config_path, get_data_path  # noqa: E402
@@ -120,6 +118,7 @@ class EigsepFpga:
         """
         self.logger = logger
         self.logger.debug("Initializing EigsepFpga")
+        cfg = deepcopy(cfg)
         self.cfg = cfg
         self.pairs = cfg["pairs"]
         self.autos = [p for p in self.pairs if len(p) == 1]
@@ -772,33 +771,6 @@ class EigsepFpga:
         )
         return data
 
-    def update_redis(self, data, cnt):
-        """
-        Update redis database with data from first half ("even")
-        integrations.
-
-        Parameters
-        ----------
-        data : dict
-            Dictionary with keys as correlation identifiers and values as
-            the corresponding spectra.
-        cnt : int
-            The current integration count.
-
-        """
-        corr_word = self.cfg["corr_word"]
-        nchan = self.cfg["nchan"]
-        spec_len = corr_word * nchan
-        for p, d in data.items():
-            if len(p) == 1:
-                d = d[:spec_len]  # only one spectrum for auto
-            else:
-                d = d[: 2 * spec_len]  # two for real/imag
-            self.redis.set(f"data:{p}", d)
-        self.redis.set("ACC_CNT", cnt)
-        self.redis.set("updated_unix", int(time.time()))
-        self.redis.set("updated_date", datetime.datetime.now().isoformat())
-
     def _read_integrations(self, pairs, timeout=10):
         """
         Read integrated correlations from the SNAP board.
@@ -841,78 +813,3 @@ class EigsepFpga:
         except AttributeError:
             pass
 
-    def observe(
-        self,
-        save_dir,
-        pairs=None,
-        timeout=10,
-        update_redis=True,
-        write_files=True,
-        ntimes=io.DEFAULT_NTIMES,
-        header=io.DEFAULT_HEADER,
-    ):
-        """
-        Observe continuously.
-
-        Parameters
-        ----------
-        save_dir: str
-            Destination directory to write files.
-        pairs : list
-            List of pairs to read. Default is None, which reads all pairs.
-        timeout : float
-            Number of seconds to wait for a new integration before returning.
-        update_redis : bool
-            Whether to update redis.
-        write_files : bool
-            Whether to write data to files.
-        ntimes : int
-            Number of integrations to write to each file. Default is
-            io.DEFAULT_NTIMES (60).
-        header : dict
-            Header to write to each file. Default is io.DEFAULT_HEADER.
-        """
-        self.file = None
-        self.queue = Queue(maxsize=0)  # XXX infinite size
-        self.event = Event()
-        if pairs is None:
-            pairs = self.pairs
-
-        self.logger.debug("Start reading integrations.")
-        thd = Thread(
-            target=self._read_integrations,
-            args=(pairs,),
-            kwargs={"timeout": timeout},
-        )
-        thd.start()
-
-        if write_files:
-            # update header
-            for k, v in self.header.items():
-                header[k] = v
-            self.file = io.File(save_dir, ntimes=ntimes, header=header)
-
-        while not self.event.is_set() or not self.queue.empty():
-            d = self.queue.get()
-            if d is None:
-                if self.event.is_set():
-                    self.logger.info("End of queue, processing finished.")
-                    break
-                else:
-                    continue
-            data = d["data"]
-            cnt = d["cnt"]
-            if update_redis:
-                self.update_redis(data, cnt)
-            if write_files:
-                filename = self.file.add_data(data, cnt)
-                if filename is not None:
-                    self.logger.info(f"Wrote file {filename}")
-        if self.file is not None:
-            if len(self.file) > 0:
-                self.logger.info("Writing short final file.")
-                self.file.corr_write()
-
-        self.event.set()
-        thd.join(timeout=1)
-        self.logger.info("Done observing.")
