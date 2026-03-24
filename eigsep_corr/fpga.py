@@ -103,7 +103,6 @@ def add_args(parser, default_config_file=default_config_file):
 
 
 class EigsepFpga:
-
     def __init__(self, cfg=default_config, program=False):
         """
         Class for interfacing with the SNAP board.

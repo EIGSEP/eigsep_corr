@@ -131,9 +131,9 @@ def read_header(filename):
         h["pairs"], h["acc_bins"], h["nchan"], h["dtype"]
     )[-1]
     h["nspec"] = (filesize - h["data_start"]) // intlen
-    assert h["nspec"] == len(
-        h["acc_cnt"]
-    ), "Check file size matches integration cnts"
+    assert h["nspec"] == len(h["acc_cnt"]), (
+        "Check file size matches integration cnts"
+    )
     h["freqs"], h["dfreq"] = utils.calc_freqs_dfreq(
         h["sample_rate"], h["nchan"]
     )
@@ -254,7 +254,6 @@ def write_file(filename, header, data):
 
 
 class File:
-
     def __init__(self, save_dir, ntimes=DEFAULT_NTIMES, header=DEFAULT_HEADER):
         self.save_dir = save_dir
         self.ntimes = ntimes

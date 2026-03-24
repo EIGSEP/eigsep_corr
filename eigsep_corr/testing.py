@@ -64,13 +64,11 @@ class DummyFpga(DummyBlock):
 
 
 class DummyAdcAdc:
-
     def selectInput(self, inp):
         pass
 
 
 class DummyAdc(DummyBlock):
-
     def __init__(self, fpga, num_chans=2, resolution=8, ref=None):
         super().__init__(fpga)
 
@@ -106,7 +104,6 @@ class DummyPfb(DummyBlock):
 
 
 class DummyPam(DummyBlock):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.attenuation = (0, 0)
@@ -124,7 +121,6 @@ class DummyPam(DummyBlock):
 
 
 class DummySync(DummyBlock):
-
     def set_delay(self, delay):
         pass
 
@@ -139,13 +135,11 @@ class DummySync(DummyBlock):
 
 
 class DummyNoise(DummyBlock):
-
     def set_seed(self, stream=None, seed=0):
         pass
 
 
 class DummyInput(DummyBlock):
-
     def use_noise(self, stream=None):
         pass
 

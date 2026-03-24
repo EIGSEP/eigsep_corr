@@ -11,3 +11,6 @@ gain_calibration/.venv_2/
 gain_calibration/.ipynb_checkpoints/
 .ipynb_checkpoints/
 scripts/test_data
+.coverage
+coverage.xml
+junit.xml
