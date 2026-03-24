@@ -28,7 +28,7 @@ dev = [
   "build",
   "twine",
   "ruff",
-  "fakeredis==2.23.5",
+  "fakeredis==2.34.1",
   "pytest",
   "pytest-cov",
   "pytest-timeout",
