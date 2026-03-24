@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eigsep_corr"
+version = "1.0.0"
+description = "Software to control EIGSEP correlator on SNAP."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{ name="Christian Hellum Bye", email="chbye@berkeley.edu" }]
+requires-python = ">=3.9"
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = [
+  "matplotlib",
+  "numpy",
+  "pyyaml",
+  "redis",
+]
+
+[project.optional-dependencies]
+dev = [
+  "build",
+  "twine",
+  "ruff",
+  "fakeredis==2.23.5",
+  "pytest",
+  "pytest-cov",
+  "pytest-timeout",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["eigsep_corr*"]
+
+[tool.setuptools.package-data]
+"eigsep_corr" = ["data/*.fpg", "data/gain_cal/**", "config/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["eigsep_corr/tests"]
+addopts = [
+  "--cov=eigsep_corr",
+  "--cov-report=term-missing",
+  "--cov-report=xml",
+  "--junitxml=junit.xml",
+  "-o junit_family=legacy",
+  "--timeout=60",
+]
+
+[tool.ruff]
+line-length = 79
+extend-exclude = ["notebooks", "snap_fengines", "build"]
+
+[tool.ruff.lint]
+extend-ignore = ["E203"]
+
+[tool.ruff.lint.per-file-ignores]
+"eigsep_corr/__init__.py" = ["F401"]
+"eigsep_corr/io.py" = ["E402", "F401", "F403"]
+"scripts/*.py" = ["E402"]

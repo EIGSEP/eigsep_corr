@@ -44,7 +44,7 @@ def plot_live(
         elif i == 1:
             colors[p] = "lime"
         else:  # pairs 0-9, and repeats if more than 12 pairs
-            colors[p] = f"C{i-2}"
+            colors[p] = f"C{i - 2}"
 
     mag_lines = {}
     phase_lines = {}
