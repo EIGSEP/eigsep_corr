@@ -273,7 +273,8 @@ class EigsepFpga:
 
         """
         return {
-            ant: ant["snap"]["input"] for ant in self.cfg["rf_chain"]["ants"]
+            name: ant["snap"]["input"]
+            for name, ant in self.cfg["rf_chain"]["ants"].items()
         }
 
     def validate_config(self):
