@@ -250,7 +250,7 @@ class NoiseGen(Block):
         """
         if stream is None:
             return [self.get_seed(stm) for stm in range(self.nstreams)]
-        assert stream <= self.nstreams
+        assert stream < self.nstreams
         regname = "seed_%d" % (stream // 4)
         return (self.read_uint(regname) >> (8 * (stream % 4))) & 0xFF
 
@@ -573,7 +573,7 @@ class Delay(Block):
             stream (int): Which antpol to delay.
             delay (int): Number of FPGA clock cycles of delay to insert.
         """
-        if stream > self.nstreams:
+        if stream >= self.nstreams:
             self._error(
                 "Tried to set delay for stream %d > nstreams (%d)"
                 % (stream, self.nstreams)
