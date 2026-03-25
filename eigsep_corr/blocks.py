@@ -575,7 +575,7 @@ class Delay(Block):
         """
         if stream >= self.nstreams:
             self._error(
-                "Tried to set delay for stream %d > nstreams (%d)"
+                "Tried to set delay for stream %d (valid range: 0 to %d-1)"
                 % (stream, self.nstreams)
             )
         # MSBs of 232-bit register are for stream 0, etc...
