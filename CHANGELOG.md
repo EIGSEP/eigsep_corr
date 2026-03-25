@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/EIGSEP/eigsep_corr/compare/v2.0.0...v2.0.1) (2026-03-25)
+
+
+### Bug Fixes
+
+* make DummyEigsepFpga work without casperfpga hardware ([d8410b7](https://github.com/EIGSEP/eigsep_corr/commit/d8410b7674765f0736f08365c434b1fbd7b44bdf))
+
 ## [2.0.0](https://github.com/EIGSEP/eigsep_corr/compare/v1.0.0...v2.0.0) (2026-03-25)
 
 
