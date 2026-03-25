@@ -45,6 +45,6 @@ The core abstraction is `EigsepFpga` (fpga.py), which composes low-level registe
 ## Testing Notes
 
 - Tests run without hardware using mock objects from `testing.py` and `fakeredis`.
-- CI matrix: Python 3.9–3.12.
+- CI matrix: Python 3.10–3.12.
 - pytest-timeout is set to 60s per test.
 - `casperfpga` is an optional dependency — the package handles its absence gracefully.
