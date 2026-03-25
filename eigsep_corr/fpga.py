@@ -431,7 +431,7 @@ class EigsepFpga:
             # initialize pams
             self.initialize_pams()
         except OSError:
-            self.logger.warn("Couldn't initialize PAMs.")
+            self.logger.warning("Couldn't initialize PAMs.")
             pass
         self.logger.info(f"Setting FFT_SHIFT: {fft_shift}")
         self.pfb.set_fft_shift(fft_shift)
