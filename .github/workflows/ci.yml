@@ -56,7 +56,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install .[dev]
-          python -m pip install "casperfpga @ git+https://github.com/EIGSEP/casperfpga.git@py312"
+          python -m pip install -r hardware-requirements.txt
       - name: Verify casperfpga imports
         run: |
           python -c "
