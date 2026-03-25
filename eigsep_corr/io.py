@@ -7,6 +7,7 @@ from . import utils
 HEADER_LEN_BYTES = 8
 HEADER_LEN_DTYPE = ">Q"
 
+
 def build_dtype(dtype, endian=None):
     """
     Build a numpy dtype from a tuple of (dtype, endian).
@@ -214,5 +215,3 @@ def write_file(filename, header, data):
             fh.write(data)
         else:
             fh.write(pack_data(data, header))
-
-

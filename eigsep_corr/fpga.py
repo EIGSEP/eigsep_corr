@@ -812,4 +812,3 @@ class EigsepFpga:
             self.queue.put(None)  # signals end of observing
         except AttributeError:
             pass
-
