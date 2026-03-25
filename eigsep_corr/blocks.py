@@ -1599,7 +1599,7 @@ class Fem(Block):
         if mode is None and east is None and north is None:
             return cur_mode, cur_e, cur_n
         if east is None:
-            east = east or cur_e
+            east = cur_e
         if north is None:
             north = cur_n
         if mode is None:
