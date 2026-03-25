@@ -1,4 +1,3 @@
-import datetime
 import json
 import os
 import struct
@@ -7,40 +6,6 @@ from . import utils
 
 HEADER_LEN_BYTES = 8
 HEADER_LEN_DTYPE = ">Q"
-DEFAULT_NTIMES = 60
-DEFAULT_HEADER = {
-    "dtype": ("int32", ">"),  # data type, endianess of data
-    "infochan": 2,  # number of frequency channels used to track acc_cnt
-    "nchan": 1024,  # number of frequency channels
-    "acc_bins": 2,  # number of accumulation bins per integration
-    "fpg_file": "eigsep_fengine_1g_v2_3_2024-07-08_1858.fpg",
-    "fpg_version": 0x2003,
-    "sample_rate": int(500e6),  # in Hz
-    "gain": 4,  # gain of ADC
-    "corr_acc_len": 2**28,  # number of samples to accumulate
-    "corr_scalar": 2**9,  # 2^9 = 1, using 8 bits after binary point
-    "pol01_delay": 0,  # delay in sample clocks of inputs 0/1
-    "pol23_delay": 0,  # delay in sample clocks of inputs 2/3
-    "pol45_delay": 0,  # delay in sample clocks of inputs 4/5
-    "pam_atten": {0: (8, 8), 1: (8, 8), 2: (8, 8)},  # PAM attenuations
-    "fft_shift": 0x0055,
-    "pairs": [
-        "0",
-        "1",
-        "2",
-        "3",
-        "4",
-        "5",
-        "02",
-        "04",
-        "24",
-        "13",
-        "15",
-        "35",
-    ],
-    "acc_cnt": np.arange(DEFAULT_NTIMES),
-    "sync_time": 0.0,
-}
 
 
 def build_dtype(dtype, endian=None):
@@ -94,8 +59,7 @@ def pack_raw_header(header):
         dt = build_dtype(header["dtype"])
     else:
         dt = build_dtype(*header["dtype"])
-    # filter to official header keys
-    header = {k: v for k, v in header.items() if k in DEFAULT_HEADER}
+    header = dict(header)  # copy to avoid mutating the original
     header["acc_cnt"] = np.array(header["acc_cnt"], dtype=dt).tolist()
     buf = json.dumps(header)
     return buf
@@ -251,40 +215,3 @@ def write_file(filename, header, data):
             fh.write(data)
         else:
             fh.write(pack_data(data, header))
-
-
-class File:
-    def __init__(self, save_dir, ntimes=DEFAULT_NTIMES, header=DEFAULT_HEADER):
-        self.save_dir = save_dir
-        self.ntimes = ntimes
-        self.buffer = {}
-        self.header = header
-        self.header["acc_cnt"] = []
-
-    def __len__(self):
-        return len(self.buffer)
-
-    def reset(self):
-        """
-        Clear buffer and reset header.
-        """
-        self.buffer = {}
-        self.header["acc_cnt"] = []
-
-    def add_data(self, data, acc_cnt):
-        self.buffer[acc_cnt] = data
-        self.header["acc_cnt"].append(acc_cnt)
-        if len(self) == self.ntimes:
-            return self.corr_write()
-        else:
-            return None
-
-    def corr_write(self, fname=None):
-        if fname is None:
-            date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            fname = os.path.join(self.save_dir, f"{date}.eig")
-        buf = [self.buffer[acc_cnt] for acc_cnt in self.header["acc_cnt"]]
-        packed_data = pack_corr_data(buf, self.header)
-        write_file(fname, self.header, packed_data)
-        self.reset()
-        return fname

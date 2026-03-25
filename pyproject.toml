@@ -17,15 +17,18 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dependencies = [
-  "matplotlib",
   "numpy",
   "pyyaml",
   "redis",
 ]
 
 [project.optional-dependencies]
+plot = [
+  "matplotlib",
+]
 dev = [
   "build",
+  "matplotlib",
   "twine",
   "ruff",
   "fakeredis==2.34.1",
@@ -63,5 +66,3 @@ extend-ignore = ["E203"]
 
 [tool.ruff.lint.per-file-ignores]
 "eigsep_corr/__init__.py" = ["F401"]
-"eigsep_corr/io.py" = ["E402", "F401", "F403"]
-"scripts/*.py" = ["E402"]

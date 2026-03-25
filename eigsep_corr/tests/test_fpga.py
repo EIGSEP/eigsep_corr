@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import tempfile
 
 import eigsep_corr.fpga
 from eigsep_corr.testing import DummyEigsepFpga, DummyPam
@@ -179,28 +178,6 @@ def test_redis_integration(fpga):
     import fakeredis
 
     assert isinstance(fpga.redis, fakeredis.FakeRedis)
-
-
-@pytest.mark.skip("Skipping test for now due to timeout issues.")
-def test_observe_method(fpga):
-    """Test the observe method with write_files=False."""
-    fpga.initialize(sync=True)
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Test observe without writing files
-        try:
-            fpga.observe(
-                save_dir=tmpdir,
-                pairs=None,
-                timeout=0.1,  # Very short timeout for testing
-                update_redis=False,
-                write_files=False,
-            )
-        except Exception:
-            # Expected to timeout quickly
-            pass
-        finally:
-            fpga.end_observing()
 
 
 def test_config_loading_integration():
