@@ -62,6 +62,12 @@ class DummyFpga(DummyBlock):
     def read(self, reg, nbytes):
         return b"\x12" * nbytes
 
+    def write(self, reg, val, offset=0, **kwargs):
+        pass
+
+    def blindwrite(self, reg, val, **kwargs):
+        pass
+
 
 class DummyAdcAdc:
     def selectInput(self, inp):
@@ -84,7 +90,7 @@ class DummyAdc(DummyBlock):
     def rampTest(self):
         return []
 
-    def selectAdc(self):
+    def selectADC(self):
         pass
 
     def set_gain(self, gain):
@@ -182,8 +188,9 @@ class DummyEigsepFpga(EigsepFpga):
         self.pfb = DummyPfb(self.fpga)
         self.blocks = [self.sync, self.noise, self.inp, self.pfb]
 
-        self.autos = ["0", "1", "2", "3", "4", "5"]
-        self.crosses = ["02", "13", "24", "35", "04", "15"]
+        self.autos = [p for p in self.pairs if len(p) == 1]
+        self.crosses = [p for p in self.pairs if len(p) == 2]
+        self.pams = []
 
         self.logger.debug("Initializing dummy Redis")
         self.redis = fakeredis.FakeRedis()
