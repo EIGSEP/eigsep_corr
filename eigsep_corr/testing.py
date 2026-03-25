@@ -51,6 +51,8 @@ class DummyFpga(DummyBlock):
 
     def read_int(self, reg):
         if reg == "corr_acc_cnt":
+            if self.sync_time is None:
+                return 0
             acc_cnt = (time.time() - self.sync_time) / self.cnt_period
             acc_cnt = int(floor(acc_cnt))
             return acc_cnt
@@ -98,15 +100,11 @@ class DummyAdc(DummyBlock):
 
 
 class DummyPfb(DummyBlock):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fft_shift = None
-
     def set_fft_shift(self, fft_shift):
-        self.fft_shift = fft_shift
+        self.fpga.write_int("fft_shift", fft_shift)
 
     def get_fft_shift(self):
-        return self.fft_shift
+        return self.fpga.read_int("fft_shift")
 
 
 class DummyPam(DummyBlock):
@@ -198,3 +196,12 @@ class DummyEigsepFpga(EigsepFpga):
         self.adc_initialized = False
         self.pams_initialized = False
         self.is_synchronized = False
+
+    def initialize_pams(self):
+        """Initialize dummy PAMs using DummyPam objects."""
+        self.pams = [DummyPam(self.fpga) for _ in range(3)]
+        self.blocks.extend(self.pams)
+        self.pams_initialized = True
+        for ant in self.cfg["rf_chain"]["ants"]:
+            atten = self.cfg["rf_chain"]["ants"][ant]["pam"]["atten"]
+            self.set_pam_atten(ant, atten)
