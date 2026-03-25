@@ -26,6 +26,9 @@ dependencies = [
 plot = [
   "matplotlib",
 ]
+hardware = [
+  "casperfpga @ git+https://github.com/EIGSEP/casperfpga.git@py312",
+]
 dev = [
   "build",
   "matplotlib",
