@@ -55,7 +55,8 @@ jobs:
       - name: Install dependencies with casperfpga
         run: |
           python -m pip install --upgrade pip
-          python -m pip install .[dev,hardware]
+          python -m pip install .[dev]
+          python -m pip install "casperfpga @ git+https://github.com/EIGSEP/casperfpga.git@py312"
       - name: Verify casperfpga imports
         run: |
           python -c "
