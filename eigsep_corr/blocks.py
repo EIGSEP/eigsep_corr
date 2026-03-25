@@ -447,11 +447,11 @@ class Input(Block):
         if sum_cores:
             means = [
                 (means[2 * i] + means[2 * i + 1]) / 2.0
-                for i in range(self.nstreams / 2)
+                for i in range(self.nstreams // 2)
             ]
             powers = [
                 (powers[2 * i] + powers[2 * i + 1]) / 2.0
-                for i in range(self.nstreams / 2)
+                for i in range(self.nstreams // 2)
             ]
             rmss = np.sqrt(powers)
         return means, powers, rmss
@@ -547,7 +547,7 @@ class Input(Block):
                 hist (numpy array): histogram data
         """
         out = np.zeros([self.nstreams, 256])
-        for stream in range(self.nstreams / 2):
+        for stream in range(self.nstreams // 2):
             x, out[stream, :] = self.get_input_histogram(stream)
         return x, out
 
@@ -718,7 +718,7 @@ class Eq(Block):
         coeffs = struct.unpack(
             ">%d%s" % (self.ncoeffs, self.format), coeffs_str
         )
-        return np.array(coeffs, dtype=np.float) / (2.0**self.bin_point)
+        return np.array(coeffs, dtype=float) / (2.0**self.bin_point)
 
     def clip_count(self):
         """
@@ -776,9 +776,7 @@ class EqTvg(Block):
             for stream in range(self.nstreams):
                 tv[stream * self.nchans : (stream + 1) * self.nchans] = stream
         for i in range(self.nstreams // 2):
-            val = tv.tostring()[
-                i * self.nchans * 2 : (i + 1) * self.nchans * 2
-            ]
+            val = tv.tobytes()[i * self.nchans * 2 : (i + 1) * self.nchans * 2]
             self.write("tv%d" % i, val)
             if verify:
                 assert self.read("tv%d" % i, len(val)) == val
@@ -805,16 +803,14 @@ class EqTvg(Block):
                     ramp + stream
                 )
         for i in range(self.nstreams // 2):
-            val = tv.tostring()[
-                i * self.nchans * 2 : (i + 1) * self.nchans * 2
-            ]
+            val = tv.tobytes()[i * self.nchans * 2 : (i + 1) * self.nchans * 2]
             self.write("tv%d" % i, val)
             if verify:
                 assert self.read("tv%d" % i, len(val)) == val
 
     def read_tvg(self):
         """Read the test vector written to the sw bram"""
-        s = ""
+        s = b""
         for i in range(self.nstreams // 2):
             s += self.read("tv%d" % i, self.nchans * 2)
         tvg = struct.unpack(
