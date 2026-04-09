@@ -2,6 +2,33 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Status: archived at 2.0.1
+
+**This package is archived and is no longer actively developed.** The live
+SNAP FPGA driver, register blocks, testing dummies, config loader, and
+correlator math helpers have all moved to
+[`eigsep_observing`](https://github.com/EIGSEP/eigsep_observing). New
+work on the correlator belongs there.
+
+This repository is retained because two of its components have no
+in-tree equivalent in `eigsep_observing` and are still needed for
+historical-data analysis:
+
+1. **`eigsep_corr.io`** — the reader (`read_file`) for the legacy `.eig`
+   binary format, used by analysis notebooks that predate the HDF5
+   migration in `eigsep_observing`.
+2. **`eigsep_corr/data/gain_cal/`** — per-component `.npz` calibration
+   files (PAM, FEM, fiber, box_fem, power, SNAP) referenced by those
+   same notebooks.
+
+Bug fixes to those two code paths may still be accepted. Anything else
+(fpga.py, blocks.py, testing.py, config loading, correlator utilities)
+should go upstream to `eigsep_observing`.
+
+Release automation has been removed from this repository: there is no
+`release-please` workflow and no PyPI publish step. The frozen 2.0.1
+release remains installable via `pip install eigsep_corr`.
+
 ## Project Overview
 
 eigsep_corr is the low-level SNAP FPGA correlator driver for EIGSEP — a 6-antenna radio interferometer. It provides hardware abstraction for ADC, FFT/PFB, PAM, and correlator blocks, plus binary I/O for correlation data. High-level orchestration lives in the separate `eigsep_observing` repository.
